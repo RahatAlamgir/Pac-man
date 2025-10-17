@@ -156,6 +156,10 @@ static std::vector<Frame> ghost_dir_frames(int base_row,int dir){
     }
 }
 
+static inline float tile_size_px(){ return std::floor(std::min(gW/28.0f, gH/31.0f)); }
+static inline float offX_px(){ return 0.5f*(gW - tile_size_px()*28.0f); }
+static inline float offY_px(){ return 0.5f*(gH - tile_size_px()*31.0f); }
+
 // ---------- API ----------
 bool draw_init(int win_w,int win_h,const char* maze_png,const char* sheet_png){
     gW=win_w; gH=win_h;
@@ -181,6 +185,8 @@ void draw_reshape(int w,int h){
     glMatrixMode(GL_PROJECTION); glLoadIdentity();
     gluOrtho2D(0, w, 0, h);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+     float ts = tile_size_px();
+    for(auto& e : g_entities) e.s = ts;
 }
 
 void draw_update(float dt){
@@ -214,7 +220,8 @@ static void draw_pellets() {
 void draw_render(){
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_TEXTURE_2D);
-    draw_image(g_bg, 0, 0, (float)gW, (float)gH);
+    float ts = tile_size_px();
+    draw_image(g_bg, offX_px(), offY_px(), ts*28.0f, ts*31.0f);
 
     // ensure textured quads draw with full color
     glColor4f(1,1,1,1);
@@ -237,16 +244,17 @@ void draw_load_demo(int px,int py,int pdir){
     draw_clear_entities();
 
     // Pac-Man
-    Entity pac = makeEntity("PacMan", (float)px, (float)py, 32.0f, pac_frames_for_dir(pdir));
+    float ts = tile_size_px();
+    Entity pac = makeEntity("PacMan", (float)px, (float)py, ts, pac_frames_for_dir(pdir));
     g_entities.push_back(pac);
     g_pac_i   = (int)g_entities.size()-1;
     g_pac_dir = pdir;
 
     // Ghosts (positions kept from your old code)
-    g_entities.push_back(makeEntity("Blinky", gW*0.5f,     gH*0.5f,     32.0f, ghost_dir_frames(4,1)));
-    g_entities.push_back(makeEntity("Pinky",  gW*0.5f-32.0, gH*0.5f,    32.0f, ghost_dir_frames(5,1)));
-    g_entities.push_back(makeEntity("Inky",   gW*0.5f+32.0, gH*0.5f,    32.0f, ghost_dir_frames(6,1)));
-    g_entities.push_back(makeEntity("Clyde",  gW*0.5f-64.0, gH*0.5f,    32.0f, ghost_dir_frames(7,2)));
+    g_entities.push_back(makeEntity("Blinky", gW*0.5f,     gH*0.5f,     ts, ghost_dir_frames(4,1)));
+    g_entities.push_back(makeEntity("Pinky",  gW*0.5f-ts, gH*0.5f,    ts, ghost_dir_frames(5,1)));
+    g_entities.push_back(makeEntity("Inky",   gW*0.5f+ts, gH*0.5f,    ts, ghost_dir_frames(6,1)));
+    g_entities.push_back(makeEntity("Clyde",  gW*0.5f-2*ts, gH*0.5f,    ts, ghost_dir_frames(7,2)));
 }
 
 // Update Pac-Man pose each frame without resetting animation

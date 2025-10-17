@@ -277,7 +277,8 @@ static void init_ghosts(){
         ghosts[i].fright_time = 0.0f;
         ghosts[i].speed = 5.8f; // tweak later
         // sync renderer right now
-        draw_set_ghost(i, px_from_tx(ghosts[i].tx)-16.0f, py_from_ty(ghosts[i].ty)-16.0f, ghosts[i].dir);
+        draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell()*0.5f,
+                  py_from_ty(ghosts[i].ty) - cell()*0.5f, ghosts[i].dir);
     }
 }
 
@@ -372,8 +373,9 @@ static void timer(int){
     }
 
     // update renderer (you prefer hardcoded -16,-16)
-    draw_set_pac(px_from_tx(pac.tx)-16.0f, py_from_ty(pac.ty)-16.0f, pac.dir);
-
+    draw_set_pac(px_from_tx(pac.tx) - cell()*0.5f,
+             py_from_ty(pac.ty) - cell()*0.5f,
+             pac.dir);
 
     // --- Update ghost modes (scatter/chase cycles) ---
     static const float cycleTimes[] = {7.0f, 20.0f, 7.0f, 20.0f, 5.0f, 20.0f}; // simple cycle: S-C-S-C-S-C
@@ -464,7 +466,8 @@ static void timer(int){
         }
 
         // Tell renderer
-        draw_set_ghost(i, px_from_tx(gh.tx)-16.0f, py_from_ty(gh.ty)-16.0f, gh.dir);
+        draw_set_ghost(i, px_from_tx(gh.tx) - cell()*0.5f,
+                  py_from_ty(gh.ty) - cell()*0.5f, gh.dir);
     }
 
 
