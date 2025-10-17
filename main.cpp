@@ -140,24 +140,27 @@ static inline void tunnel_wrap(){
 static void draw_dots(){
     const float r_small = cell()*0.12f;
     const float r_big   = cell()*0.32f;
+
+    // choose colors
+    const float normalR=1.0f, normalG=1.0f, normalB=1.0f;        // white
+    const float powerR =1.0f, powerG =0.84f, powerB =0.0f;        // gold/yellow
+
     for(int y=0; y<ROWS; ++y){
         for(int x=0; x<COLS; ++x){
             char c = GRID[y][x];
-            //glColor3f(1.0f, 1.0f, 1.0f);
-            if(c=='.')      pellet(px_from_tx((float)x), py_from_ty((float)y), r_small);
+            float px = px_from_tx((float)x);
+            float py = py_from_ty((float)y);
 
-            else if(c=='o'){
-
-                pellet(px_from_tx((float)x), py_from_ty((float)y), r_big);
-
-
-
+            if(c=='.'){
+                pellet(px, py, r_small); // white
+            } else if(c=='o'){
+                pellet_colored(px, py, r_big, powerR, powerG, powerB); // gold/yellow
             }
         }
     }
 }
 static void ghost_target_tile(int g, int& tx, int& ty){
-    // Pac’s current center tile
+    // Pacï¿½s current center tile
     int pcx = (int)std::round(pac.tx);
     int pcy = (int)std::round(pac.ty);
 
@@ -182,23 +185,23 @@ static void ghost_target_tile(int g, int& tx, int& ty){
 
     // CHASE per ghost
     switch(g){
-        case 0: // Blinky – target Pac directly
+        case 0: // Blinky ï¿½ target Pac directly
             tx = pcx; ty = pcy; break;
-        case 1: { // Pinky – 4 tiles ahead of Pac
+        case 1: { // Pinky ï¿½ 4 tiles ahead of Pac
             int f = 4;
             tx = pcx + dx(pac.dir)*f;
             ty = pcy + dy(pac.dir)*f;
         } break;
-        case 2: { // Inky – reflect 2 tiles ahead of Pac around Blinky
+        case 2: { // Inky ï¿½ reflect 2 tiles ahead of Pac around Blinky
             int pax = pcx + dx(pac.dir)*2;
             int pay = pcy + dy(pac.dir)*2;
-            int bx, by; // Blinky’s tile
+            int bx, by; // Blinkyï¿½s tile
             bx = (int)std::round(ghosts[0].tx);
             by = (int)std::round(ghosts[0].ty);
             tx = pax + (pax - bx);
             ty = pay + (pay - by);
         } break;
-        case 3: { // Clyde – chase if far, else scatter corner
+        case 3: { // Clyde ï¿½ chase if far, else scatter corner
             int dist = manhattan(pcx,pcy, (int)std::round(ghosts[3].tx), (int)std::round(ghosts[3].ty));
             if(dist >= 8){ tx = pcx; ty = pcy; }
             else { tx = cornerX[3]; ty = cornerY[3]; }
@@ -380,7 +383,7 @@ static void timer(int){
         // frightened comes from power pellets
         if(power_time > 0.0f && gh.mode != EATEN){
             gh.mode = FRIGHTENED;
-            gh.fright_time = power_time;  // keep synced with Pac’s global
+            gh.fright_time = power_time;  // keep synced with Pacï¿½s global
         } else if(gh.mode == FRIGHTENED && power_time <= 0.0f){
             // fall back to scatter/chase track
             gh.mode = (gh.mode_clock <= 7.0f || (gh.mode_clock>7.0f && gh.mode_clock<=14.0f) || (gh.mode_clock>27.0f && gh.mode_clock<=34.0f)) ? SCATTER : CHASE;
@@ -441,7 +444,7 @@ static void timer(int){
             }
         }
 
-        // EATEN -> when reaches “home” switch back to scatter
+        // EATEN -> when reaches ï¿½homeï¿½ switch back to scatter
         if(gh.mode==EATEN){
             if((int)std::round(gh.tx)==COLS/2 && (int)std::round(gh.ty)==11){
                 gh.mode = SCATTER;
@@ -481,7 +484,7 @@ static void specialKey(int key,int,int){
 }
 
 static void reset_game(){
-    // Clear render entities (so we don’t stack duplicates)
+    // Clear render entities (so we donï¿½t stack duplicates)
     draw_clear_entities();
 
     // Reset grid & counters
@@ -500,7 +503,7 @@ static void reset_game(){
     // Reset ghosts and sync their render state
     init_ghosts();
 
-    // Make sure Pac’s sprite is also synced
+    // Make sure Pacï¿½s sprite is also synced
     draw_set_pac(px_from_tx(pac.tx)-16.0f, py_from_ty(pac.ty)-16.0f, pac.dir);
 
     glutPostRedisplay();

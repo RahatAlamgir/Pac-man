@@ -64,9 +64,10 @@ struct Entity {
 static Texture g_sheet;
 static Texture g_bg;
 static std::vector<Entity> g_entities;
-
 static int gW=0, gH=0;
-struct Pellet { float x, y, r; };
+
+// Pellets buffered per frame so they render behind Pac-Man
+struct Pellet { float x, y, r, cr, cg, cb; };
 static std::vector<Pellet> g_pellets;
 
 // keep handle to pac entity
@@ -145,7 +146,7 @@ static std::vector<Frame> pac_frames_for_dir(int dir){
 static std::vector<Frame> ghost_row_pair(int row){ return {{0+0,row,0.12f},{1+0,row,0.12f}}; }
 static std::vector<Frame> ghost_dir_frames(int base_row,int dir){
     // sheet uses 4 consecutive columns for the four directions in your original code.
-    // We’ll keep the same rows you used: row 4=blinky, 5=pinky, 6=inky, 7=clyde
+    // Weï¿½ll keep the same rows you used: row 4=blinky, 5=pinky, 6=inky, 7=clyde
     switch(dir){
         case 1: return {{0,base_row,0.12f},{1,base_row,0.12f}};
         case 2: return {{2,base_row,0.12f},{3,base_row,0.12f}};
@@ -192,11 +193,11 @@ static void draw_pellets() {
 
     glDisable(GL_TEXTURE_2D);
 
-
     for (const auto& p : g_pellets) {
+        glColor3f(p.cr, p.cg, p.cb); // use per-pellet color
         glBegin(GL_TRIANGLE_FAN);
             glVertex2f(p.x, p.y);
-            for (int i=0; i<=24; ++i) {
+            for (int i=0;i<=24;++i){
                 float a = 2*PI*i/24.0f;
                 glVertex2f(p.x + p.r*std::cos(a), p.y + p.r*std::sin(a));
             }
@@ -206,7 +207,6 @@ static void draw_pellets() {
     glEnable(GL_TEXTURE_2D);
     glColor4f(1,1,1,1);
 
-    // Clear for next frame
     g_pellets.clear();
 }
 
@@ -284,7 +284,10 @@ void draw_set_ghost(int which, float x, float y, int dir){
 }
 
 
-// simple pellets (you call from main after draw_render if desired)
 void pellet(float x, float y, float r){
-    g_pellets.push_back({x, y, r});
+    g_pellets.push_back({x, y, r, 1.0f, 1.0f, 1.0f}); // white
+}
+
+void pellet_colored(float x, float y, float r, float cr, float cg, float cb){
+    g_pellets.push_back({x, y, r, cr, cg, cb});
 }

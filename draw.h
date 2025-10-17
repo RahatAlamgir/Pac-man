@@ -15,6 +15,8 @@ void draw_clear_entities();
 // Add characters (animated) at pixel coords. dir: 1=right,2=left,3=up,4=down.
 void pacman(float x, float y, int dir);
 void blinky(float x, float y, int dir);
+void pellet_colored(float x, float y, float r, float cr, float cg, float cb);
+
 
 // Optional: quick loader of a demo set
 void draw_load_demo(int px,int py,int pdir);
