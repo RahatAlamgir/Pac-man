@@ -247,6 +247,32 @@ void draw_text(float x, float y, const char* s, float r, float g, float b){
     glColor4f(1,1,1,1);
 }
 
+int draw_text_width(const char* s){
+    if(!s) return 0;
+    return glutBitmapLength(GLUT_BITMAP_9_BY_15,
+                            reinterpret_cast<const unsigned char*>(s));
+}
+
+void draw_text_shadow(float x, float y, const char* s,
+                      float r, float g, float b){
+    if(!s) return;
+    glDisable(GL_TEXTURE_2D);
+
+    // shadow
+    glColor3f(0.f, 0.f, 0.f);
+    glRasterPos2f(x+1.f, y-1.f);
+    for(const char* p = s; *p; ++p) glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *p);
+
+    // main
+    glColor3f(r,g,b);
+    glRasterPos2f(x, y);
+    for(const char* p = s; *p; ++p) glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *p);
+
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1,1,1,1);
+}
+
+
 
 void draw_clear_entities(){ g_entities.clear(); }
 

@@ -28,4 +28,15 @@ void draw_set_pac(float x, float y, int dir);
 // dir: 1=right,2=left,3=up,4= down
 void draw_set_ghost(int which, float x, float y, int dir);
 
+
+
+// Bitmap text (window pixel coords; origin = bottom-left)
 void draw_text(float x, float y, const char* s, float r, float g, float b);
+
+// Same font as draw_text; returns pixel width for centering.
+int  draw_text_width(const char* s);
+
+// Convenience: draws a tiny drop shadow for readability
+void draw_text_shadow(float x, float y, const char* s,
+                      float r, float g, float b);
+

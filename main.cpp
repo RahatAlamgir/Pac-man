@@ -10,7 +10,9 @@
 #include "draw.h"
 
 static int WW = 226*3, HH = 248*3;
-
+enum HudSide { HUD_LEFT=0, HUD_RIGHT=1 };
+static HudSide g_hudSide = HUD_RIGHT;  // default: right of maze
+int hiScore = 0;
 enum Dir { UP=3, LEFT=2, DOWN=4, RIGHT=1, NONE=0 };
 
 static bool g_paused = false;
@@ -311,17 +313,62 @@ static void display(){
 
     draw_dots();
     draw_render();
+    if(score > hiScore) hiScore = score;
 
     // --- HUD ---
-    char buf[64];
-    std::snprintf(buf, sizeof(buf), "SCORE: %d", score);
-    draw_text(10.0f, HH - 20.0f, buf, 1.0f, 1.0f, 1.0f); // white at top-left
+    // --- Maze-anchored HUD (classic layout) ---
+    // Grid width/height (replace with your actual names if different)
+    const int GW = 28;//grid_w();   // or your constant, e.g., 28
+    const int GH = 31;//grid_h();   // or your constant, e.g., 31
+
+    // Maze bounds in window pixels.
+    // left = center of tile 0 minus half-cell; right/top similar.
+    // Convert tiles to pixels and compute maze rect regardless of Y direction
+    const float y0 = py_from_ty(0);
+    const float yN = py_from_ty(GH-1);
+    const float topY    = std::max(y0, yN) + cell()*0.5f;
+    const float bottomY = std::min(y0, yN) - cell()*0.5f;
+
+    const float leftX  = px_from_tx(0)      - cell()*0.5f;
+    const float rightX = px_from_tx(GW-1)   + cell()*0.5f;
+
+    // Panel placement
+    const float gap   = cell()*0.60f;    // spacing from maze border
+    const float padX  = 8.0f;            // inner pad
+    const float lineH = 18.0f;           // line height
+
+    const bool hudRight = (g_hudSide==HUD_RIGHT);
+    const float panelX  = hudRight ? (rightX + gap) : (leftX - gap);
+
+    // Text helpers
+    auto anchorX = [&](const char* s)->float {
+        int w = draw_text_width(s);
+        return hudRight ? (panelX + padX) : (panelX - padX - w);
+    };
+
+    // Strings
+    char sOneUp[] = "1UP";
+    char sHigh[]  = "HIGH SCORE";
+    char sScore[32], sHi[32];
+    std::snprintf(sScore, sizeof(sScore), "%d", score);
+    std::snprintf(sHi,    sizeof(sHi),    "%d", hiScore);
+
+    // Layout from top toward bottom
+    float y = topY - 10.0f;
+
+    draw_text_shadow(anchorX(sOneUp), y, sOneUp, 1,1,1);
+    draw_text_shadow(anchorX(sScore), y - lineH, sScore, 1,1,1);
+
+    y -= lineH*2.0f + 10.0f;
+
+    draw_text_shadow(anchorX(sHigh), y, sHigh, 1,1,1);
+    draw_text_shadow(anchorX(sHi),   y - lineH, sHi,   1,1,1);
+
+
 
     if(g_paused){
         draw_text(WW*0.5f - 40.0f, HH*0.5f, "PAUSED", 1.0f, 1.0f, 0.2f);
     }
-
-
     glutSwapBuffers();
 }
 
@@ -545,20 +592,16 @@ static void reset_game(){
     glutPostRedisplay();
 }
 static void keyDown(unsigned char key, int, int){
-    if(key=='p' || key=='P'){
-        g_paused = !g_paused;
+    if(key=='p' || key=='P'){ g_paused = !g_paused; glutPostRedisplay(); return; }
+    if(key=='r' || key=='R'){ g_paused = false; reset_game(); return; }
+    if(key=='h' || key=='H'){
+        g_hudSide = (g_hudSide==HUD_LEFT)? HUD_RIGHT : HUD_LEFT;
         glutPostRedisplay();
         return;
     }
-    if(key=='r' || key=='R'){
-        g_paused = false;
-        reset_game();
-        return;
-    }
-    if(key==27){ // Esc
-        std::exit(0);
-    }
+    if(key==27){ std::exit(0); }
 }
+
 
 
 // --------------- Main ---------------
