@@ -235,6 +235,19 @@ void draw_render(){
     // glutSwapBuffers() is done by your main.cpp
 }
 
+void draw_text(float x, float y, const char* s, float r, float g, float b){
+    if(!s) return;
+    glDisable(GL_TEXTURE_2D);
+    glColor3f(r,g,b);
+    glRasterPos2f(x, y);
+    for(const char* p = s; *p; ++p){
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *p);
+    }
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1,1,1,1);
+}
+
+
 void draw_clear_entities(){ g_entities.clear(); }
 
 // ---------- Public helpers you use ----------

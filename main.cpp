@@ -79,7 +79,7 @@ struct Ghost {
     float tx=13, ty=11;   // tile position
     Dir   dir=LEFT;       // current direction
     Dir   last=LEFT;      // for reverse checks
-    float speed=5.8f;     // tiles/sec (slightly slower than Pac)
+    float speed=3.8f;     // tiles/sec (slightly slower than Pac)
     GhostMode mode=SCATTER;
     float fright_time=0.0f;   // countdown when frightened
     float mode_clock=0.0f;    // for scatter/chase cycling
@@ -265,7 +265,7 @@ static Dir choose_dir(int g, int cx, int cy){
 }
 static void init_ghosts(){
     // reasonable corridor starts (outside the house so they can roam)
-    ghosts[0] = Ghost{13, 11, LEFT};   // Blinky
+    ghosts[0] = Ghost{13, 14, UP};   // Blinky
     ghosts[1] = Ghost{14, 14, UP};     // Pinky
     ghosts[2] = Ghost{12, 14, UP};     // Inky
     ghosts[3] = Ghost{15, 14, UP};     // Clyde
@@ -275,10 +275,33 @@ static void init_ghosts(){
         ghosts[i].mode = SCATTER;
         ghosts[i].mode_clock = 0.0f;
         ghosts[i].fright_time = 0.0f;
-        ghosts[i].speed = 5.8f; // tweak later
+        ghosts[i].speed = 3.8f; // tweak later
         // sync renderer right now
         draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell()*0.5f,
                   py_from_ty(ghosts[i].ty) - cell()*0.5f, ghosts[i].dir);
+    }
+}
+
+static void reset_after_death(){
+    // Reset Pac to spawn (do NOT reset score or dots here)
+    pac.tx = 13; pac.ty = 23; pac.dir = UP; pac.want = RIGHT;
+
+    // Reset ghosts to their starting tiles & modes
+    ghosts[0] = Ghost{13, 14, LEFT, LEFT, 3.8f, SCATTER, 0.0f, 0.0f}; // Blinky
+    ghosts[1] = Ghost{14, 14, UP,   UP,   3.8f, SCATTER, 0.0f, 0.0f}; // Pinky
+    ghosts[2] = Ghost{12, 14, UP,   UP,   3.8f, SCATTER, 0.0f, 0.0f}; // Inky
+    ghosts[3] = Ghost{15, 14, UP,   UP,   3.8f, SCATTER, 0.0f, 0.0f}; // Clyde
+
+    // Sync renderer (Pac + all ghosts)
+    draw_set_pac(px_from_tx(pac.tx) - cell()*0.5f,
+                 py_from_ty(pac.ty) - cell()*0.5f,
+                 pac.dir);
+
+    for(int i=0;i<4;++i){
+        draw_set_ghost(i,
+            px_from_tx(ghosts[i].tx) - cell()*0.5f,
+            py_from_ty(ghosts[i].ty) - cell()*0.5f,
+            ghosts[i].dir);
     }
 }
 
@@ -288,6 +311,15 @@ static void display(){
 
     draw_dots();
     draw_render();
+
+    // --- HUD ---
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "SCORE: %d", score);
+    draw_text(10.0f, HH - 20.0f, buf, 1.0f, 1.0f, 1.0f); // white at top-left
+
+    if(g_paused){
+        draw_text(WW*0.5f - 40.0f, HH*0.5f, "PAUSED", 1.0f, 1.0f, 0.2f);
+    }
 
 
     glutSwapBuffers();
@@ -461,7 +493,8 @@ static void timer(int){
                 gh.mode = EATEN; // send to house
             } else if(gh.mode!=EATEN){
                 // Pac dies (simple reset)
-                pac.tx=13; pac.ty=23; pac.dir=UP; pac.want=RIGHT;
+                //pac.tx=13; pac.ty=23; pac.dir=UP; pac.want=RIGHT;
+                reset_after_death();
             }
         }
 

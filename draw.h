@@ -27,3 +27,5 @@ void draw_set_pac(float x, float y, int dir);
 // Set ghost position/dir: which = 0(Blinky),1(Pinky),2(Inky),3(Clyde)
 // dir: 1=right,2=left,3=up,4= down
 void draw_set_ghost(int which, float x, float y, int dir);
+
+void draw_text(float x, float y, const char* s, float r, float g, float b);
