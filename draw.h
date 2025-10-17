@@ -9,7 +9,7 @@ void draw_reshape(int w, int h);   // call from your GLUT reshape
 void draw_update(float dt);        // call each tick (e.g., 1/120)
 void draw_render();                // call in display()
 
-void draw_toggle_pause();
+
 void draw_clear_entities();
 
 // Add characters (animated) at pixel coords. dir: 1=right,2=left,3=up,4=down.
@@ -22,3 +22,6 @@ void pellet(float x, float y, float r);
 
 void draw_set_pac(float x, float y, int dir);
 
+// Set ghost position/dir: which = 0(Blinky),1(Pinky),2(Inky),3(Clyde)
+// dir: 1=right,2=left,3=up,4= down
+void draw_set_ghost(int which, float x, float y, int dir);

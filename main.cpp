@@ -71,6 +71,40 @@ static void init_grid(){
     }
 }
 
+enum GhostMode { SCATTER, CHASE, FRIGHTENED, EATEN };
+
+struct Ghost {
+    float tx=13, ty=11;   // tile position
+    Dir   dir=LEFT;       // current direction
+    Dir   last=LEFT;      // for reverse checks
+    float speed=5.8f;     // tiles/sec (slightly slower than Pac)
+    GhostMode mode=SCATTER;
+    float fright_time=0.0f;   // countdown when frightened
+    float mode_clock=0.0f;    // for scatter/chase cycling
+};
+
+// 0=Blinky,1=Pinky,2=Inky,3=Clyde (classic)
+static Ghost ghosts[4];
+
+
+static inline bool is_blocked(int tx,int ty){
+    if(tx<0||tx>=COLS||ty<0||ty>=ROWS) return true;
+    char c = MAZE_RAW[ty][tx];
+    // Treat walls as blocked; keep the ghost house simple by blocking everything non-path
+    return (c=='W');
+}
+
+static inline int manhattan(int ax,int ay,int bx,int by){
+    return std::abs(ax-bx)+std::abs(ay-by);
+}
+
+static Dir opposite(Dir d){
+    if(d==LEFT) return RIGHT;
+    if(d==RIGHT) return LEFT;
+    if(d==UP) return DOWN;
+    if(d==DOWN) return UP;
+    return NONE;
+}
 
 // --------------- Pixel helpers ---------------
 static inline float cell(){ return std::floor(std::min(WW/(float)COLS, HH/(float)ROWS)); }
@@ -100,17 +134,7 @@ static inline void tunnel_wrap(){
 }
 
 // --------------- Dots ---------------
-static void draw_dotsold(){
-    const float r_small = cell()*0.12f;
-    const float r_big   = cell()*0.32f;
-    for(int y=0; y<ROWS; ++y){
-        for(int x=0; x<COLS; ++x){
-            char c = MAZE_RAW[y][x];
-            if(c=='.')      pellet(px_from_tx((float)x), py_from_ty((float)y), r_small);
-            else if(c=='o') pellet(px_from_tx((float)x), py_from_ty((float)y), r_big);
-        }
-    }
-}
+
 static void draw_dots(){
     const float r_small = cell()*0.12f;
     const float r_big   = cell()*0.32f;
@@ -122,12 +146,135 @@ static void draw_dots(){
         }
     }
 }
+static void ghost_target_tile(int g, int& tx, int& ty){
+    // Pac’s current center tile
+    int pcx = (int)std::round(pac.tx);
+    int pcy = (int)std::round(pac.ty);
+
+    // scatter corners (roughly classic)
+    const int cornerX[4] = { COLS-3,  2, COLS-3, 2 };
+    const int cornerY[4] = {  2,     2, ROWS-3, ROWS-3 };
+
+    Ghost& gh = ghosts[g];
+
+    if(gh.mode==SCATTER){ tx = cornerX[g]; ty = cornerY[g]; return; }
+    if(gh.mode==FRIGHTENED){
+        // wander: pick a short target slightly away from Pac
+        tx = pcx + (std::rand()%7 - 3);
+        ty = pcy + (std::rand()%7 - 3);
+        return;
+    }
+    if(gh.mode==EATEN){
+        // send home (just pick the center above house so they don't get stuck)
+        tx = COLS/2; ty = 11;
+        return;
+    }
+
+    // CHASE per ghost
+    switch(g){
+        case 0: // Blinky – target Pac directly
+            tx = pcx; ty = pcy; break;
+        case 1: { // Pinky – 4 tiles ahead of Pac
+            int f = 4;
+            tx = pcx + dx(pac.dir)*f;
+            ty = pcy + dy(pac.dir)*f;
+        } break;
+        case 2: { // Inky – reflect 2 tiles ahead of Pac around Blinky
+            int pax = pcx + dx(pac.dir)*2;
+            int pay = pcy + dy(pac.dir)*2;
+            int bx, by; // Blinky’s tile
+            bx = (int)std::round(ghosts[0].tx);
+            by = (int)std::round(ghosts[0].ty);
+            tx = pax + (pax - bx);
+            ty = pay + (pay - by);
+        } break;
+        case 3: { // Clyde – chase if far, else scatter corner
+            int dist = manhattan(pcx,pcy, (int)std::round(ghosts[3].tx), (int)std::round(ghosts[3].ty));
+            if(dist >= 8){ tx = pcx; ty = pcy; }
+            else { tx = cornerX[3]; ty = cornerY[3]; }
+        } break;
+    }
+
+    // clamp target to grid to avoid overflow
+    tx = std::clamp(tx, 0, COLS-1);
+    ty = std::clamp(ty, 0, ROWS-1);
+}
+static Dir choose_dir(int g, int cx, int cy){
+    Ghost& gh = ghosts[g];
+
+    // valid directions (no reversing unless forced)
+    Dir candidates[4] = {UP, LEFT, DOWN, RIGHT};
+    Dir best = NONE;
+    int bestScore = 1e9;
+
+    int tx, ty; ghost_target_tile(g, tx, ty);
+
+    int openCount = 0;
+    for(Dir d : candidates){
+        if(d==NONE) continue;
+        if(opposite(d)==gh.dir) continue; // don't reverse unless only option
+
+        int nx = cx + dx(d);
+        int ny = cy + dy(d);
+        if(!is_blocked(nx,ny)){
+            ++openCount;
+            // use squared distance (Manhattan is also fine)
+            int score = (tx-nx)*(tx-nx) + (ty-ny)*(ty-ny);
+            if(score < bestScore){ bestScore = score; best = d; }
+        }
+    }
+
+    // If dead end or only reverse is possible, allow reverse
+    if(best==NONE){
+        for(Dir d : candidates){
+            int nx = cx + dx(d);
+            int ny = cy + dy(d);
+            if(!is_blocked(nx,ny)){
+                best = d; break;
+            }
+        }
+    }
+
+    // Frightened mode: pick a random legal direction (still avoid walls)
+    if(ghosts[g].mode==FRIGHTENED){
+        std::vector<Dir> legal;
+        for(Dir d : candidates){
+            if(d==NONE) continue;
+            if(opposite(d)==gh.dir) continue;
+            int nx = cx + dx(d), ny = cy + dy(d);
+            if(!is_blocked(nx,ny)) legal.push_back(d);
+        }
+        if(!legal.empty()){
+            best = legal[std::rand()%legal.size()];
+        }
+    }
+    return best==NONE ? gh.dir : best;
+}
+static void init_ghosts(){
+    // reasonable corridor starts (outside the house so they can roam)
+    ghosts[0] = Ghost{13, 11, LEFT};   // Blinky
+    ghosts[1] = Ghost{14, 14, UP};     // Pinky
+    ghosts[2] = Ghost{12, 14, UP};     // Inky
+    ghosts[3] = Ghost{15, 14, UP};     // Clyde
+
+    // initial scatter
+    for(int i=0;i<4;++i){
+        ghosts[i].mode = SCATTER;
+        ghosts[i].mode_clock = 0.0f;
+        ghosts[i].fright_time = 0.0f;
+        ghosts[i].speed = 5.8f; // tweak later
+        // sync renderer right now
+        draw_set_ghost(i, px_from_tx(ghosts[i].tx)-16.0f, py_from_ty(ghosts[i].ty)-16.0f, ghosts[i].dir);
+    }
+}
 
 
 // --------------- GLUT callbacks ---------------
 static void display(){
+
     draw_render();
     draw_dots();
+
     glutSwapBuffers();
 }
 
@@ -202,17 +349,106 @@ static void timer(int){
     // update renderer (you prefer hardcoded -16,-16)
     draw_set_pac(px_from_tx(pac.tx)-16.0f, py_from_ty(pac.ty)-16.0f, pac.dir);
 
+
+    // --- Update ghost modes (scatter/chase cycles) ---
+    static const float cycleTimes[] = {7.0f, 20.0f, 7.0f, 20.0f, 5.0f, 20.0f}; // simple cycle: S-C-S-C-S-C
+    for(int i=0;i<4;++i){
+        Ghost& gh = ghosts[i];
+
+        // frightened comes from power pellets
+        if(power_time > 0.0f && gh.mode != EATEN){
+            gh.mode = FRIGHTENED;
+            gh.fright_time = power_time;  // keep synced with Pac’s global
+        } else if(gh.mode == FRIGHTENED && power_time <= 0.0f){
+            // fall back to scatter/chase track
+            gh.mode = (gh.mode_clock <= 7.0f || (gh.mode_clock>7.0f && gh.mode_clock<=14.0f) || (gh.mode_clock>27.0f && gh.mode_clock<=34.0f)) ? SCATTER : CHASE;
+        }
+
+        if(gh.mode != FRIGHTENED && gh.mode != EATEN){
+            gh.mode_clock += dt;
+            float t = gh.mode_clock;
+            // very rough cycle mapping
+            if(t <= 7.0f) gh.mode = SCATTER;
+            else if(t <= 27.0f) gh.mode = CHASE;
+            else if(t <= 34.0f) gh.mode = SCATTER;
+            else gh.mode = CHASE;
+        }
+
+        // speed tweaks
+        float s = gh.speed;
+        if(gh.mode==FRIGHTENED) s *= 0.5f;
+        if(gh.mode==EATEN)      s *= 1.5f;
+
+        // movement like Pac: move center-to-center
+        auto centered = [](float v){ return std::fabs(v - std::round(v)) < 1e-2f; };
+
+        if(centered(gh.tx) && centered(gh.ty)){
+            int cx = (int)std::round(gh.tx);
+            int cy = (int)std::round(gh.ty);
+            Dir nd = choose_dir(i, cx, cy);
+            gh.dir = nd;
+        }
+
+        // advance toward next tile
+        int cx = (int)std::round(gh.tx);
+        int cy = (int)std::round(gh.ty);
+        int nx = cx + dx(gh.dir);
+        int ny = cy + dy(gh.dir);
+        if(!is_blocked(nx,ny)){
+            float gx = (float)nx;
+            float gy = (float)ny;
+            float vx = gx - gh.tx, vy = gy - gh.ty;
+            float dist = std::sqrt(vx*vx + vy*vy);
+            float adv = std::min(s*dt, dist);
+            if(dist > 1e-6f){
+                gh.tx += (vx/dist)*adv;
+                gh.ty += (vy/dist)*adv;
+                if(adv >= dist - 1e-4f){ gh.tx=gx; gh.ty=gy; }
+            }
+        } else {
+            gh.tx = (float)cx; gh.ty = (float)cy; // wait at center
+        }
+
+        // Tunnel wrap for ghosts too (same as Pac)
+        if(centered(gh.tx) && centered(gh.ty)){
+            int gx = (int)std::round(gh.tx);
+            int gy = (int)std::round(gh.ty);
+            if(gy>=0 && gy<ROWS && MAZE_RAW[gy][gx]=='T'){
+                if(gx==0 && gh.dir==LEFT)            gh.tx = (float)(COLS-1);
+                else if(gx==COLS-1 && gh.dir==RIGHT) gh.tx = 0.0f;
+            }
+        }
+
+        // EATEN -> when reaches “home” switch back to scatter
+        if(gh.mode==EATEN){
+            if((int)std::round(gh.tx)==COLS/2 && (int)std::round(gh.ty)==11){
+                gh.mode = SCATTER;
+            }
+        }
+
+        // Collision with Pac
+        float dtx = gh.tx - pac.tx;
+        float dty = gh.ty - pac.ty;
+        if(dtx*dtx + dty*dty < 0.25f){ // within ~0.5 tile
+            if(power_time > 0.0f && gh.mode!=EATEN){
+                gh.mode = EATEN; // send to house
+            } else if(gh.mode!=EATEN){
+                // Pac dies (simple reset)
+                pac.tx=13; pac.ty=23; pac.dir=UP; pac.want=RIGHT;
+            }
+        }
+
+        // Tell renderer
+        draw_set_ghost(i, px_from_tx(gh.tx)-16.0f, py_from_ty(gh.ty)-16.0f, gh.dir);
+    }
+
+
+
     draw_update(dt);
     glutPostRedisplay();
     glutTimerFunc(1000/120, timer, 0);
 }
 
-
-
-static void key(unsigned char k,int,int){
-    if(k==27) std::exit(0);
-    if(k==' ') draw_toggle_pause();
-}
 
 static void specialKey(int key,int,int){
     if(key==GLUT_KEY_UP)    pac.want=UP;
@@ -235,10 +471,12 @@ int main(int argc,char** argv){
     float start_px = px_from_tx(pac.tx);
     float start_py = py_from_ty(pac.ty);
     draw_load_demo((int)start_px, (int)start_py, pac.dir);
+    init_ghosts();
+
 
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
-    glutKeyboardFunc(key);
+
     glutSpecialFunc(specialKey);
     glutTimerFunc(1000/120, timer, 0);
     glutMainLoop();

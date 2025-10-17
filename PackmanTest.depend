@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1759693449 source:f:\c++\opengl\packmantest\main.cpp
+1760528013 source:f:\c++\opengl\packmantest\main.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -28,7 +28,7 @@
 	<intrin.h>
 	<arm_neon.h>
 
-1759682971 source:f:\c++\opengl\packmantest\draw.cpp
+1760527993 source:f:\c++\opengl\packmantest\draw.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -40,5 +40,48 @@
 	<algorithm>
 	"stb_image.h"
 
-1759681324 f:\c++\opengl\packmantest\draw.h
+1760527954 f:\c++\opengl\packmantest\draw.h
+
+1760527993 source:f:\djnago\git_setup\project\pac-man\draw.cpp
+	<GL/glew.h>
+	<GL/freeglut.h>
+	<vector>
+	<string>
+	<initializer_list>
+	<cstdio>
+	<cstdlib>
+	<cmath>
+	<algorithm>
+	"stb_image.h"
+
+1760708954 f:\djnago\git_setup\project\pac-man\stb_image.h
+	"stb_image.h"
+	<stdio.h>
+	<stdlib.h>
+	<stdarg.h>
+	<stddef.h>
+	<stdlib.h>
+	<string.h>
+	<limits.h>
+	<math.h>
+	<stdio.h>
+	<assert.h>
+	<stdint.h>
+	<emmintrin.h>
+	<intrin.h>
+	<arm_neon.h>
+
+1760645394 source:f:\djnago\git_setup\project\pac-man\main.cpp
+	<GL/glew.h>
+	<GL/freeglut.h>
+	<vector>
+	<string>
+	<initializer_list>
+	<cstdio>
+	<cstdlib>
+	<cmath>
+	<algorithm>
+	"draw.h"
+
+1760710371 f:\djnago\git_setup\project\pac-man\draw.h
 

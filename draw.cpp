@@ -66,7 +66,7 @@ static Texture g_bg;
 static std::vector<Entity> g_entities;
 
 static int gW=0, gH=0;
-static bool gPaused=false;
+
 
 // keep handle to pac entity
 static int   g_pac_i = -1;
@@ -182,7 +182,7 @@ void draw_reshape(int w,int h){
 }
 
 void draw_update(float dt){
-    if(gPaused) return;
+
     for(auto& e: g_entities) e.anim.update(dt);
 }
 
@@ -201,7 +201,6 @@ void draw_render(){
     // glutSwapBuffers() is done by your main.cpp
 }
 
-void draw_toggle_pause(){ gPaused = !gPaused; }
 void draw_clear_entities(){ g_entities.clear(); }
 
 // ---------- Public helpers you use ----------
@@ -235,6 +234,28 @@ void draw_set_pac(float x, float y, int dir){
         g_pac_dir = dir;
     }
 }
+
+static int ghost_base_row_from_index(int which){
+    // rows in your sheet: 4=blinky,5=pinky,6=inky,7=clyde
+    switch(which){
+        case 0: return 4; // Blinky
+        case 1: return 5; // Pinky
+        case 2: return 6; // Inky
+        case 3: return 7; // Clyde
+        default: return 4;
+    }
+}
+
+void draw_set_ghost(int which, float x, float y, int dir){
+    // after Pac: indices 1..4 are ghosts created by draw_load_demo
+    int idx = 1 + which;
+    if(idx < 0 || idx >= (int)g_entities.size()) return;
+    Entity& g = g_entities[idx];
+    g.x = x; g.y = y;
+    int base = ghost_base_row_from_index(which);
+    g.anim.set_frames(ghost_dir_frames(base, dir), /*keep_phase=*/true);
+}
+
 
 // simple pellets (you call from main after draw_render if desired)
 void pellet(float x, float y, float r){
