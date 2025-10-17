@@ -13,6 +13,8 @@ static int WW = 226*3, HH = 248*3;
 
 enum Dir { UP=3, LEFT=2, DOWN=4, RIGHT=1, NONE=0 };
 
+static bool g_paused = false;
+
 struct Pac {
     float tx=13, ty=23;   // tile coords
     Dir dir=UP, want=RIGHT;
@@ -141,8 +143,16 @@ static void draw_dots(){
     for(int y=0; y<ROWS; ++y){
         for(int x=0; x<COLS; ++x){
             char c = GRID[y][x];
+            //glColor3f(1.0f, 1.0f, 1.0f);
             if(c=='.')      pellet(px_from_tx((float)x), py_from_ty((float)y), r_small);
-            else if(c=='o') pellet(px_from_tx((float)x), py_from_ty((float)y), r_big);
+
+            else if(c=='o'){
+
+                pellet(px_from_tx((float)x), py_from_ty((float)y), r_big);
+
+
+
+            }
         }
     }
 }
@@ -272,8 +282,9 @@ static void init_ghosts(){
 // --------------- GLUT callbacks ---------------
 static void display(){
 
-    draw_render();
     draw_dots();
+    draw_render();
+
 
     glutSwapBuffers();
 }
@@ -286,6 +297,17 @@ static void reshape(int w,int h){
 static void timer(int){
     const float dt   = 1.0f/120.0f;
     const float step = pac.speed * dt; // tiles per frame
+
+
+    if(g_paused){
+        // keep animations ticking if you like; or comment next line to fully freeze
+        draw_update(dt);
+        glutPostRedisplay();
+        glutTimerFunc(1000/120, timer, 0);
+        return;
+    }
+
+
 
     auto centered = [](float v){ return std::fabs(v - std::round(v)) < 1e-2f; };
     auto ddx = [](Dir d){ return d==LEFT?-1 : d==RIGHT?1 : 0; };
@@ -451,11 +473,54 @@ static void timer(int){
 
 
 static void specialKey(int key,int,int){
+    if(g_paused) return; // ignore arrows while paused
     if(key==GLUT_KEY_UP)    pac.want=UP;
     if(key==GLUT_KEY_DOWN)  pac.want=DOWN;
     if(key==GLUT_KEY_LEFT)  pac.want=LEFT;
     if(key==GLUT_KEY_RIGHT) pac.want=RIGHT;
 }
+
+static void reset_game(){
+    // Clear render entities (so we don’t stack duplicates)
+    draw_clear_entities();
+
+    // Reset grid & counters
+    init_grid();
+    score       = 0;
+    power_time  = 0.0f;
+
+    // Reset Pac to struct defaults
+    pac = Pac{};  // uses your default member initializers
+
+    // Re-seed renderer just like startup
+    float start_px = px_from_tx(pac.tx);
+    float start_py = py_from_ty(pac.ty);
+    draw_load_demo((int)start_px, (int)start_py, pac.dir);
+
+    // Reset ghosts and sync their render state
+    init_ghosts();
+
+    // Make sure Pac’s sprite is also synced
+    draw_set_pac(px_from_tx(pac.tx)-16.0f, py_from_ty(pac.ty)-16.0f, pac.dir);
+
+    glutPostRedisplay();
+}
+static void keyDown(unsigned char key, int, int){
+    if(key=='p' || key=='P'){
+        g_paused = !g_paused;
+        glutPostRedisplay();
+        return;
+    }
+    if(key=='r' || key=='R'){
+        g_paused = false;
+        reset_game();
+        return;
+    }
+    if(key==27){ // Esc
+        std::exit(0);
+    }
+}
+
 
 // --------------- Main ---------------
 int main(int argc,char** argv){
@@ -478,6 +543,8 @@ int main(int argc,char** argv){
     glutReshapeFunc(reshape);
 
     glutSpecialFunc(specialKey);
+    glutKeyboardFunc(keyDown);
+
     glutTimerFunc(1000/120, timer, 0);
     glutMainLoop();
     return 0;

@@ -66,7 +66,8 @@ static Texture g_bg;
 static std::vector<Entity> g_entities;
 
 static int gW=0, gH=0;
-
+struct Pellet { float x, y, r; };
+static std::vector<Pellet> g_pellets;
 
 // keep handle to pac entity
 static int   g_pac_i = -1;
@@ -186,6 +187,30 @@ void draw_update(float dt){
     for(auto& e: g_entities) e.anim.update(dt);
 }
 
+static void draw_pellets() {
+    if (g_pellets.empty()) return;
+
+    glDisable(GL_TEXTURE_2D);
+
+
+    for (const auto& p : g_pellets) {
+        glBegin(GL_TRIANGLE_FAN);
+            glVertex2f(p.x, p.y);
+            for (int i=0; i<=24; ++i) {
+                float a = 2*PI*i/24.0f;
+                glVertex2f(p.x + p.r*std::cos(a), p.y + p.r*std::sin(a));
+            }
+        glEnd();
+    }
+
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1,1,1,1);
+
+    // Clear for next frame
+    g_pellets.clear();
+}
+
+
 void draw_render(){
     glClear(GL_COLOR_BUFFER_BIT);
     glEnable(GL_TEXTURE_2D);
@@ -193,6 +218,8 @@ void draw_render(){
 
     // ensure textured quads draw with full color
     glColor4f(1,1,1,1);
+
+    draw_pellets();
 
     for(const auto& e: g_entities){
         const Frame& f = e.anim.cur();
@@ -259,15 +286,5 @@ void draw_set_ghost(int which, float x, float y, int dir){
 
 // simple pellets (you call from main after draw_render if desired)
 void pellet(float x, float y, float r){
-    glDisable(GL_TEXTURE_2D);
-    glColor3f(1,1,1);
-    glBegin(GL_TRIANGLE_FAN);
-      glVertex2f(x, y);
-      for(int i=0;i<=24;++i){
-          float a = 2*PI*i/24;
-          glVertex2f(x + r*std::cos(a), y + r*std::sin(a));
-      }
-    glEnd();
-    glEnable(GL_TEXTURE_2D);
-    glColor4f(1,1,1,1);
+    g_pellets.push_back({x, y, r});
 }

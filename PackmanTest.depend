@@ -42,7 +42,7 @@
 
 1760527954 f:\c++\opengl\packmantest\draw.h
 
-1760527993 source:f:\djnago\git_setup\project\pac-man\draw.cpp
+1760715275 source:f:\djnago\git_setup\project\pac-man\draw.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -71,7 +71,7 @@
 	<intrin.h>
 	<arm_neon.h>
 
-1760645394 source:f:\djnago\git_setup\project\pac-man\main.cpp
+1760715310 source:f:\djnago\git_setup\project\pac-man\main.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
