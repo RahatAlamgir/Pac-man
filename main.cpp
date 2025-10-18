@@ -115,7 +115,7 @@ static const char *MAZE_RAW[ROWS] = {
 static char GRID[ROWS][COLS]; // copy of MAZE_RAW you can edit
 static int score = 0;
 static int dots_left = 0;
-static float power_time = 3.0f; // seconds of energizer effect
+float power_time = 6.0f; // seconds of energizer effect
 
 static void init_grid()
 {
@@ -413,8 +413,12 @@ static void init_ghosts()
         ghosts[i].fright_time = 0.0f;
         ghosts[i].speed = 3.8f; // tweak later
         // sync renderer right now
-        draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell() * 0.5f,
-                       py_from_ty(ghosts[i].ty) - cell() * 0.5f, ghosts[i].dir);
+        //draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell() * 0.5f,py_from_ty(ghosts[i].ty) - cell() * 0.5f, ghosts[i].dir);
+        draw_set_ghost_state(i,px_from_tx(ghosts[i].tx) - cell()*0.5f,
+                                py_from_ty(ghosts[i].ty) - cell()*0.5f,
+                                ghosts[i].dir,
+                                (int)ghosts[i].mode);
+
     }
 }
 
@@ -792,8 +796,13 @@ static void timer(int)
         }
 
         // Tell renderer
-        draw_set_ghost(i, px_from_tx(gh.tx) - cell() * 0.5f,
-                       py_from_ty(gh.ty) - cell() * 0.5f, gh.dir);
+        //draw_set_ghost(i, px_from_tx(gh.tx) - cell() * 0.5f, py_from_ty(gh.ty) - cell() * 0.5f, gh.dir);
+        draw_set_ghost_state(i,
+                    px_from_tx(gh.tx) - cell()*0.5f,
+                    py_from_ty(gh.ty) - cell()*0.5f,
+                    gh.dir,
+                    (int)gh.mode);
+
     }
 
     draw_update(dt);

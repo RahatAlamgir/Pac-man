@@ -40,3 +40,8 @@ int  draw_text_width(const char* s);
 void draw_text_shadow(float x, float y, const char* s,
                       float r, float g, float b);
 
+
+// Set ghost with mode:
+// mode: 0=SCATTER, 1=CHASE, 2=FRIGHTENED, 3=EATEN (same as your enum)
+void draw_set_ghost_state(int which, float x, float y, int dir, int mode);
+

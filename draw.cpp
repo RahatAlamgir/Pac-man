@@ -18,6 +18,7 @@
 static constexpr float PI = 3.14159265358979323846f;
 
 struct Texture { GLuint id=0; int w=0, h=0; };
+const float POWER_TOTAL = 6.0f;
 
 struct Frame { int col, row; float dur; };
 
@@ -78,6 +79,35 @@ static int   g_pac_dir = 1; // 1=R,2=L,3=U,4=D (matches your sheet rows)
 static const int TILE=16;
 
 // ---------- Helpers ----------
+
+// --- Frightened ghost (blue/white flash) ---
+static std::vector<Frame> ghost_fright_frames_blue(){
+    return {
+        {8, 4, 0.20f},
+        {9, 4, 0.20f},
+    };
+}
+
+static std::vector<Frame> ghost_fright_frames_white(){
+    return {
+        {10, 4, 0.20f},
+        {11, 4, 0.20f},
+    };
+}
+
+// --- Eaten (eyes only) ---
+// dir is an int in range [0..3]. Fill order must match YOUR Dir enum.
+// If your Dir is {UP=0, LEFT=1, DOWN=2, RIGHT=3}, this mapping is correct.
+static std::vector<Frame> ghost_eaten_frames_dir(int dir){
+    // index by dir: 0=UP, 1=LEFT, 2=DOWN, 3=RIGHT
+    // tiles: up=10,5  left=9,5  down=11,5  right=8,5
+    static const int tx_by_dir[4] = { 10, 9, 11, 8 };
+    int idx = (dir >= 0 && dir < 4) ? dir : 3; // default to RIGHT if out of range
+    return { { tx_by_dir[idx], 5, 0.25f } };
+}
+
+
+
 static Texture load_png(const char* path){
     Texture t; int comp=0;
     unsigned char* px = stbi_load(path, &t.w, &t.h, &comp, 4);
@@ -329,6 +359,35 @@ void draw_set_ghost(int which, float x, float y, int dir){
     int base = ghost_base_row_from_index(which);
     g.anim.set_frames(ghost_dir_frames(base, dir), /*keep_phase=*/true);
 }
+
+void draw_set_ghost_state(int which, float x, float y, int dir, int mode){
+    int idx = 1 + which;
+    if(idx < 0 || idx >= (int)g_entities.size()) return;
+
+    Entity& g = g_entities[idx];
+    g.x = x; g.y = y;
+
+    // mode: 0=SCATTER, 1=CHASE, 2=FRIGHTENED, 3=EATEN
+    if(mode == 2){ // FRIGHTENED
+        // if you track a "power_time" globally, we can flash near expiry
+        extern float power_time;
+        extern const float POWER_TOTAL; // define in main.cpp (e.g., 6.0f)
+        bool flash = (power_time < POWER_TOTAL * 0.33f);
+        if(flash)
+            g.anim.set_frames(ghost_fright_frames_white(), true);
+        else
+            g.anim.set_frames(ghost_fright_frames_blue(), true);
+    }
+    else if(mode == 3){ // EATEN
+        g.anim.set_frames(ghost_eaten_frames_dir(dir), true);
+    }
+    else{
+        int base = ghost_base_row_from_index(which);
+        g.anim.set_frames(ghost_dir_frames(base, dir), true);
+    }
+}
+
+
 
 
 void pellet(float x, float y, float r){

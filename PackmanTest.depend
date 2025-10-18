@@ -42,7 +42,7 @@
 
 1760527954 f:\c++\opengl\packmantest\draw.h
 
-1760729246 source:f:\djnago\git_setup\project\pac-man\draw.cpp
+1760772001 source:f:\djnago\git_setup\project\pac-man\draw.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -71,7 +71,7 @@
 	<intrin.h>
 	<arm_neon.h>
 
-1760732734 source:f:\djnago\git_setup\project\pac-man\main.cpp
+1760772271 source:f:\djnago\git_setup\project\pac-man\main.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -82,6 +82,17 @@
 	<cmath>
 	<algorithm>
 	"draw.h"
+	"audio.h"
 
-1760729835 f:\djnago\git_setup\project\pac-man\draw.h
+1760768462 f:\djnago\git_setup\project\pac-man\draw.h
+
+1760767622 source:f:\djnago\git_setup\project\pac-man\audio.cpp
+	"miniaudio.h"
+	<windows.h>
+	<mmsystem.h>
+	<cstdio>
+
+1760767622 f:\djnago\git_setup\project\pac-man\miniaudio.h
+
+1760767622 f:\djnago\git_setup\project\pac-man\audio.h
 
