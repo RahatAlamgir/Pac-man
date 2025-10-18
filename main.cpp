@@ -43,6 +43,7 @@ static const char *SFX_POWER = "assets/sfx/pellet.wav";
 static const char *SFX_EAT_GHOST = "assets/sfx/eat_ghost.wav";
 static const char *SFX_DEATH = "assets/sfx/eyes_firstloop.wav";
 static const char *SFX_INTERMISSION = "assets/sfx/intermission.wav";
+static const char *SFX_ARCADE = "assets/sfx/arcade.wav";
 enum HudSide
 {
     HUD_LEFT = 0,
@@ -338,8 +339,10 @@ static Dir choose_dir(int g, int cx, int cy)
         std::vector<Dir> legal;
         for (Dir d : candidates)
         {
-            if (d == NONE) continue;
-            if (opposite(d) == gh.dir) continue;
+            if (d == NONE)
+                continue;
+            if (opposite(d) == gh.dir)
+                continue;
 
             int nx = cx + dx(d);
             int ny = cy + dy(d);
@@ -347,11 +350,14 @@ static Dir choose_dir(int g, int cx, int cy)
             // Tunnel wrap from edge 'T'
             if (MAZE_RAW[cy][cx] == 'T')
             {
-                if (cx == 0 && d == LEFT) nx = COLS - 1;
-                else if (cx == COLS - 1 && d == RIGHT) nx = 0;
+                if (cx == 0 && d == LEFT)
+                    nx = COLS - 1;
+                else if (cx == COLS - 1 && d == RIGHT)
+                    nx = 0;
             }
 
-            if (!is_blocked(nx, ny)) legal.push_back(d);
+            if (!is_blocked(nx, ny))
+                legal.push_back(d);
         }
         if (!legal.empty())
             return legal[std::rand() % legal.size()];
@@ -373,21 +379,29 @@ static Dir choose_dir(int g, int cx, int cy)
 
     // 3) BFS shortest path from (cx,cy) to (tx,ty), respecting tunnel wrap and
     //    "avoid reversing unless it’s the only way out" at the start tile.
-    struct P { short x, y; };
+    struct P
+    {
+        short x, y;
+    };
     bool visited[ROWS][COLS] = {};
     P parent[ROWS][COLS];
     for (int y = 0; y < ROWS; ++y)
         for (int x = 0; x < COLS; ++x)
             parent[y][x] = {-1, -1};
 
-    auto in_bounds = [](int x, int y) {
+    auto in_bounds = [](int x, int y)
+    {
         return x >= 0 && x < COLS && y >= 0 && y < ROWS;
     };
 
-    auto enqueue = [&](int x, int y, int px, int py, std::queue<P> &q) {
-        if (!in_bounds(x, y)) return;
-        if (visited[y][x]) return;
-        if (is_blocked(x, y)) return;
+    auto enqueue = [&](int x, int y, int px, int py, std::queue<P> &q)
+    {
+        if (!in_bounds(x, y))
+            return;
+        if (visited[y][x])
+            return;
+        if (is_blocked(x, y))
+            return;
         visited[y][x] = true;
         parent[y][x] = {(short)px, (short)py};
         q.push({(short)x, (short)y});
@@ -400,7 +414,8 @@ static Dir choose_dir(int g, int cx, int cy)
 
     Dir rev = opposite(gh.dir);
 
-    auto push_neighbors = [&](int x, int y) {
+    auto push_neighbors = [&](int x, int y)
+    {
         const Dir order[4] = {UP, LEFT, DOWN, RIGHT}; // classic tie-break: U,L,D,R
         const bool atTunnel = (MAZE_RAW[y][x] == 'T');
         const bool isRoot = (x == cx && y == cy);
@@ -411,25 +426,32 @@ static Dir choose_dir(int g, int cx, int cy)
         {
             for (Dir d : order)
             {
-                if (d == rev) continue;
+                if (d == rev)
+                    continue;
                 int nx = x + dx(d), ny = y + dy(d);
                 if (atTunnel)
                 {
-                    if (x == 0 && d == LEFT) nx = COLS - 1;
-                    else if (x == COLS - 1 && d == RIGHT) nx = 0;
+                    if (x == 0 && d == LEFT)
+                        nx = COLS - 1;
+                    else if (x == COLS - 1 && d == RIGHT)
+                        nx = 0;
                 }
-                if (in_bounds(nx, ny) && !is_blocked(nx, ny)) ++nonRevCount;
+                if (in_bounds(nx, ny) && !is_blocked(nx, ny))
+                    ++nonRevCount;
             }
         }
 
         for (Dir d : order)
         {
-            if (isRoot && nonRevCount > 0 && d == rev) continue; // avoid reverse unless forced
+            if (isRoot && nonRevCount > 0 && d == rev)
+                continue; // avoid reverse unless forced
             int nx = x + dx(d), ny = y + dy(d);
             if (atTunnel)
             {
-                if (x == 0 && d == LEFT) nx = COLS - 1;
-                else if (x == COLS - 1 && d == RIGHT) nx = 0;
+                if (x == 0 && d == LEFT)
+                    nx = COLS - 1;
+                else if (x == COLS - 1 && d == RIGHT)
+                    nx = 0;
             }
             enqueue(nx, ny, x, y, q);
         }
@@ -438,8 +460,10 @@ static Dir choose_dir(int g, int cx, int cy)
     // BFS loop
     while (!q.empty())
     {
-        P p = q.front(); q.pop();
-        if (p.x == tx && p.y == ty) break;
+        P p = q.front();
+        q.pop();
+        if (p.x == tx && p.y == ty)
+            break;
         push_neighbors(p.x, p.y);
     }
 
@@ -448,15 +472,19 @@ static Dir choose_dir(int g, int cx, int cy)
     {
         // try straight
         int nx = cx + dx(gh.dir), ny = cy + dy(gh.dir);
-        if (!is_blocked(nx, ny)) return gh.dir;
+        if (!is_blocked(nx, ny))
+            return gh.dir;
 
         // try any non-reverse legal
         const Dir order[4] = {UP, LEFT, DOWN, RIGHT};
         for (Dir d : order)
         {
-            if (d == rev) continue;
-            nx = cx + dx(d); ny = cy + dy(d);
-            if (!is_blocked(nx, ny)) return d;
+            if (d == rev)
+                continue;
+            nx = cx + dx(d);
+            ny = cy + dy(d);
+            if (!is_blocked(nx, ny))
+                return d;
         }
         // must reverse
         return rev != NONE ? rev : gh.dir;
@@ -467,23 +495,29 @@ static Dir choose_dir(int g, int cx, int cy)
     while (!(parent[ry][rx].x == cx && parent[ry][rx].y == cy))
     {
         P pr = parent[ry][rx];
-        if (pr.x == -1 && pr.y == -1) break; // safety
-        rx = pr.x; ry = pr.y;
+        if (pr.x == -1 && pr.y == -1)
+            break; // safety
+        rx = pr.x;
+        ry = pr.y;
     }
 
-    if (rx > cx) return RIGHT;
-    if (rx < cx) return LEFT;
-    if (ry > cy) return DOWN;
-    if (ry < cy) return UP;
+    if (rx > cx)
+        return RIGHT;
+    if (rx < cx)
+        return LEFT;
+    if (ry > cy)
+        return DOWN;
+    if (ry < cy)
+        return UP;
     return gh.dir; // fallback
 }
 static void init_ghosts()
 {
     // reasonable corridor starts (outside the house so they can roam)
-    ghosts[0] = Ghost{14, 14, UP}; // Blinky
-    ghosts[1] = Ghost{13, 14, LEFT}; // Pinky
+    ghosts[0] = Ghost{14, 14, UP};    // Blinky
+    ghosts[1] = Ghost{13, 14, LEFT};  // Pinky
     ghosts[2] = Ghost{12, 14, RIGHT}; // Inky
-    ghosts[3] = Ghost{15, 14, UP}; // Clyde
+    ghosts[3] = Ghost{15, 14, UP};    // Clyde
 
     // initial scatter
     for (int i = 0; i < 4; ++i)
@@ -493,12 +527,11 @@ static void init_ghosts()
         ghosts[i].fright_time = 0.0f;
         ghosts[i].speed = 3.8f; // tweak later
         // sync renderer right now
-        //draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell() * 0.5f,py_from_ty(ghosts[i].ty) - cell() * 0.5f, ghosts[i].dir);
-        draw_set_ghost_state(i,px_from_tx(ghosts[i].tx) - cell()*0.5f,
-                                py_from_ty(ghosts[i].ty) - cell()*0.5f,
-                                ghosts[i].dir,
-                                (int)ghosts[i].mode);
-
+        // draw_set_ghost(i, px_from_tx(ghosts[i].tx) - cell() * 0.5f,py_from_ty(ghosts[i].ty) - cell() * 0.5f, ghosts[i].dir);
+        draw_set_ghost_state(i, px_from_tx(ghosts[i].tx) - cell() * 0.5f,
+                             py_from_ty(ghosts[i].ty) - cell() * 0.5f,
+                             ghosts[i].dir,
+                             (int)ghosts[i].mode);
     }
 }
 
@@ -512,10 +545,10 @@ static void reset_after_death()
     power_time = 0.0f;
 
     // Reset ghosts to their starting tiles & modes
-    ghosts[0] = Ghost{14, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f}; // Blinky
-    ghosts[1] = Ghost{13, 14, LEFT, LEFT, 3.8f, SCATTER, 0.0f, 0.0f};     // Pinky
-    ghosts[2] = Ghost{12, 14, RIGHT, RIGHT, 3.8f, SCATTER, 0.0f, 0.0f};     // Inky
-    ghosts[3] = Ghost{15, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};     // Clyde
+    ghosts[0] = Ghost{14, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};       // Blinky
+    ghosts[1] = Ghost{13, 14, LEFT, LEFT, 3.8f, SCATTER, 0.0f, 0.0f};   // Pinky
+    ghosts[2] = Ghost{12, 14, RIGHT, RIGHT, 3.8f, SCATTER, 0.0f, 0.0f}; // Inky
+    ghosts[3] = Ghost{15, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};       // Clyde
 
     // Sync renderer (Pac + all ghosts)
     draw_set_pac(px_from_tx(pac.tx) - cell() * 0.5f,
@@ -683,7 +716,7 @@ static void timer(int)
             c = ' ';
             score += 10;
             --dots_left;
-            // audio_play(SFX_PELLET); // <<< sound: small dot
+            audio_play(SFX_ARCADE); // <<< sound: small dot
         }
         else if (c == 'o')
         {
@@ -877,13 +910,12 @@ static void timer(int)
         }
 
         // Tell renderer
-        //draw_set_ghost(i, px_from_tx(gh.tx) - cell() * 0.5f, py_from_ty(gh.ty) - cell() * 0.5f, gh.dir);
+        // draw_set_ghost(i, px_from_tx(gh.tx) - cell() * 0.5f, py_from_ty(gh.ty) - cell() * 0.5f, gh.dir);
         draw_set_ghost_state(i,
-                    px_from_tx(gh.tx) - cell()*0.5f,
-                    py_from_ty(gh.ty) - cell()*0.5f,
-                    gh.dir,
-                    (int)gh.mode);
-
+                             px_from_tx(gh.tx) - cell() * 0.5f,
+                             py_from_ty(gh.ty) - cell() * 0.5f,
+                             gh.dir,
+                             (int)gh.mode);
     }
 
     draw_update(dt);
