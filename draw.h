@@ -45,3 +45,10 @@ void draw_text_shadow(float x, float y, const char* s,
 // mode: 0=SCATTER, 1=CHASE, 2=FRIGHTENED, 3=EATEN (same as your enum)
 void draw_set_ghost_state(int which, float x, float y, int dir, int mode);
 
+// Big, bold, centered title using GLUT stroke font (pixel coords).
+void draw_title_centered(float cx, float y,
+                         const char* s,
+                         float px_height,
+                         float r, float g, float b);
+
+

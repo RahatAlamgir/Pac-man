@@ -11,10 +11,10 @@
 #include "audio.h" // Audio
 #include <queue>
 
-static int WW = 226 * 3, HH = 248 * 3;
+static int WW = 226 * 3, HH = 248 * 2;
 
 // --- Fullscreen state ---
-static bool g_fullscreen = true;
+static bool g_fullscreen = false;
 static int g_windowX = 100, g_windowY = 100;
 static int g_windowW = WW, g_windowH = HH;
 
@@ -36,6 +36,21 @@ static void toggle_fullscreen()
     }
 #endif
 }
+
+// ===== Menu state =====
+enum GameMode { MODE_MENU, MODE_PLAYING };
+static GameMode g_mode = MODE_MENU;   // start in menu
+static int g_menuSel = 0;             // 0..3 highlighted item
+
+struct Rect { float x,y,w,h; };       // window-pixel coords (origin bottom-left)
+static Rect g_btn[4];                 // Start, Resume, Restart, Quit
+
+// Menu actions (don’t change order; we map labels from these)
+enum MenuAction { ACT_START, ACT_RESUME, ACT_RESTART, ACT_QUIT };
+
+// Current menu composition for this frame
+static MenuAction g_menuOrder[4];
+static int g_menuCount = 0;
 
 // --- SFX paths (put the actual files in these locations or change the paths) ---
 static const char *SFX_PELLET = "assets/sfx/pellet.wav";
@@ -586,6 +601,181 @@ static void lose_life()
     }
 }
 
+
+static void reset_game()
+{
+    // Clear render entities (so we don�t stack duplicates)
+    draw_clear_entities();
+
+    // Reset grid & counters
+    init_grid();
+    score = 0;
+    power_time = 0.0f;
+
+    // Reset Pac to struct defaults
+    pac = Pac{}; // uses your default member initializers
+
+    // Re-seed renderer just like startup
+    float start_px = px_from_tx(pac.tx);
+    float start_py = py_from_ty(pac.ty);
+    draw_load_demo((int)start_px, (int)start_py, pac.dir);
+
+    // Reset ghosts and sync their render state
+    init_ghosts();
+
+    // Make sure Pac�s sprite is also synced
+    draw_set_pac(px_from_tx(pac.tx) - 16.0f, py_from_ty(pac.ty) - 16.0f, pac.dir);
+
+    glutPostRedisplay();
+}
+
+static void layout_menu(int n)
+{
+    const float bw = std::min(360.0f, WW * 0.5f);
+    const float bh = 42.0f;
+    const float gap = 12.0f;
+
+    const float cx = WW * 0.5f;
+    const float cy = HH * 0.55f;
+
+    for (int i=0; i<n; ++i){
+        g_btn[i].w = bw;
+        g_btn[i].h = bh;
+        g_btn[i].x = cx - bw * 0.5f;
+        g_btn[i].y = cy - (i * (bh + gap));
+    }
+}
+
+
+static inline bool pt_in_rect(float x,float y,const Rect& r){
+    return (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+}
+
+static void draw_panel(const Rect& r, bool hot)
+{
+    // simple filled quad + border
+    glDisable(GL_TEXTURE_2D);
+    // background (slightly darker when not selected)
+    glColor4f(0.f, 0.f, 0.f, hot ? 0.55f : 0.35f);
+    glBegin(GL_QUADS);
+      glVertex2f(r.x,       r.y);
+      glVertex2f(r.x+r.w,   r.y);
+      glVertex2f(r.x+r.w,   r.y+r.h);
+      glVertex2f(r.x,       r.y+r.h);
+    glEnd();
+    // outline
+    glColor4f(hot ? 1.f : 0.7f, hot ? 1.f : 0.7f, hot ? 1.f : 0.7f, 1.f);
+    glBegin(GL_LINE_LOOP);
+      glVertex2f(r.x,       r.y);
+      glVertex2f(r.x+r.w,   r.y);
+      glVertex2f(r.x+r.w,   r.y+r.h);
+      glVertex2f(r.x,       r.y+r.h);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+}
+
+static void rebuild_menu()
+{
+    g_menuCount = 0;
+
+    if (g_paused) {
+        // Paused by user -> Resume, Restart, Quit
+        g_menuOrder[g_menuCount++] = ACT_RESUME;
+        g_menuOrder[g_menuCount++] = ACT_RESTART;
+        g_menuOrder[g_menuCount++] = ACT_QUIT;
+    } else {
+        // Not paused -> Start, Quit
+        g_menuOrder[g_menuCount++] = ACT_START;
+        g_menuOrder[g_menuCount++] = ACT_QUIT;
+    }
+
+    // clamp selection
+    if (g_menuSel >= g_menuCount) g_menuSel = g_menuCount - 1;
+    if (g_menuSel < 0) g_menuSel = 0;
+}
+
+
+static const char* action_label(MenuAction a){
+    switch(a){
+        case ACT_START:   return "Start";
+        case ACT_RESUME:  return "Resume";
+        case ACT_RESTART: return "Restart";
+        case ACT_QUIT:    return "Quit";
+    }
+    return "";
+}
+
+static void draw_menu()
+{
+    rebuild_menu();       // ensure correct buttons for current state
+    layout_menu(g_menuCount);
+
+    // darken background (you already made it darker)
+    glDisable(GL_TEXTURE_2D);
+    glColor4f(0.f, 0.f, 0.f, 0.75f);
+    glBegin(GL_QUADS);
+      glVertex2f(0, 0);   glVertex2f(WW, 0);
+      glVertex2f(WW, HH); glVertex2f(0, HH);
+    glEnd();
+    glEnable(GL_TEXTURE_2D);
+
+    // Big bold title (your stroke helper)
+    draw_title_centered(WW * 0.5f, HH * 0.78f, "PAC-MAN", 72.0f, 1.0f, 1.0f, 0.2f);
+
+    for (int i=0; i<g_menuCount; ++i){
+        Rect r = g_btn[i];
+        const bool hot = (i == g_menuSel);
+        draw_panel(r, hot);
+
+        const char* s = action_label(g_menuOrder[i]);
+        int tw = draw_text_width(s);
+        float tx = r.x + (r.w - tw) * 0.5f;
+        float ty = r.y + (r.h - 15.f) * 0.5f + 4.f;
+        draw_text_shadow(tx, ty, s, 1,1,1);
+    }
+
+    draw_text_shadow(WW*0.5f - draw_text_width("Use Up/Down and Enter (or click)")*0.5f,
+                     HH*0.2f, "Use Up/Down and Enter (or click)", 1,1,1);
+}
+
+
+static void menu_activate(MenuAction act)
+{
+    switch(act){
+        case ACT_START:
+            g_gameOver = false;
+            g_lives = 3;
+            g_paused = false;
+            reset_game();
+            g_mode = MODE_PLAYING;
+            break;
+
+        case ACT_RESUME:
+            if(!g_gameOver){
+                g_paused = false;
+                g_mode = MODE_PLAYING;
+            }
+            break;
+
+        case ACT_RESTART:
+            g_gameOver = false;
+            g_lives = 3;
+            g_paused = false;
+            reset_game();
+            g_mode = MODE_PLAYING;
+            break;
+
+        case ACT_QUIT:
+            std::exit(0);
+            break;
+    }
+}
+
+
+
+
+
+
 // --------------- GLUT callbacks ---------------
 static void display()
 {
@@ -660,6 +850,10 @@ static void display()
     {
         draw_text(WW * 0.5f - 40.0f, HH * 0.5f, "PAUSED", 1.0f, 1.0f, 0.2f);
     }
+
+    if (g_mode == MODE_MENU) {
+        draw_menu();
+    }
     glutSwapBuffers();
 }
 
@@ -674,6 +868,16 @@ static void timer(int)
 {
     const float dt = 1.0f / 120.0f;
     const float step = pac.speed * dt; // tiles per frame
+
+
+    if (g_mode == MODE_MENU) {
+        // Keep tiny animation (mouth, ghost blink) while paused
+        draw_update(1.0f/120.0f);
+        glutPostRedisplay();
+        glutTimerFunc(1000/120, timer, 0);
+        return;
+    }
+
 
     // death cooldown tick
     if (g_deathCooldown > 0)
@@ -925,54 +1129,71 @@ static void timer(int)
 
 static void specialKey(int key, int, int)
 {
-    if (g_paused)
-        return; // ignore arrows while paused
-    if (key == GLUT_KEY_UP)
-        pac.want = UP;
-    if (key == GLUT_KEY_DOWN)
-        pac.want = DOWN;
-    if (key == GLUT_KEY_LEFT)
-        pac.want = LEFT;
-    if (key == GLUT_KEY_RIGHT)
-        pac.want = RIGHT;
-}
+    if (g_mode == MODE_MENU) {
+        if (key == GLUT_KEY_UP)   { g_menuSel = (g_menuSel + g_menuCount - 1) % g_menuCount; glutPostRedisplay(); }
+        if (key == GLUT_KEY_DOWN) { g_menuSel = (g_menuSel + 1) % g_menuCount; glutPostRedisplay(); }
 
-static void reset_game()
+        if (key == GLUT_KEY_LEFT) { /* no-op for now */ }
+        if (key == GLUT_KEY_RIGHT){ /* no-op for now */ }
+        return;
+    }
+
+    if (g_paused) return; // ignore arrows while paused (playing mode will never hit here paused)
+
+    if (key == GLUT_KEY_UP)    pac.want = UP;
+    if (key == GLUT_KEY_DOWN)  pac.want = DOWN;
+    if (key == GLUT_KEY_LEFT)  pac.want = LEFT;
+    if (key == GLUT_KEY_RIGHT) pac.want = RIGHT;
+}
+static void mouseBtn(int button, int state, int x, int y)
 {
-    // Clear render entities (so we don�t stack duplicates)
-    draw_clear_entities();
+    if (g_mode != MODE_MENU) return;
+    if (button != GLUT_LEFT_BUTTON || state != GLUT_DOWN) return;
 
-    // Reset grid & counters
-    init_grid();
-    score = 0;
-    power_time = 0.0f;
+    // GLUT gives y from top; convert to bottom-left origin
+    float mx = (float)x;
+    float my = (float)(HH - y);
 
-    // Reset Pac to struct defaults
-    pac = Pac{}; // uses your default member initializers
+    for (int i=0; i<g_menuCount; ++i){
+        if (pt_in_rect(mx, my, g_btn[i])) {
+            g_menuSel = i;
+            menu_activate(g_menuOrder[i]);
+            glutPostRedisplay();
+            return;
+        }
+    }
 
-    // Re-seed renderer just like startup
-    float start_px = px_from_tx(pac.tx);
-    float start_py = py_from_ty(pac.ty);
-    draw_load_demo((int)start_px, (int)start_py, pac.dir);
-
-    // Reset ghosts and sync their render state
-    init_ghosts();
-
-    // Make sure Pac�s sprite is also synced
-    draw_set_pac(px_from_tx(pac.tx) - 16.0f, py_from_ty(pac.ty) - 16.0f, pac.dir);
-
-    glutPostRedisplay();
 }
+
+
+
+
+
 static void keyDown(unsigned char key, int, int)
 {
-    if ((key == 'p' || key == 'P') && !g_gameOver)
-    {
+    if (g_mode == MODE_MENU) {
+        if (key == 13 || key == ' ') { // Enter or Space
+            menu_activate(g_menuOrder[g_menuSel]);
+            return;
+        }
+        if (key == 27) { // Esc = Quit from menu
+            std::exit(0);
+        }
+        // allow quick toggle to start with 's'
+        if (key=='s' || key=='S'){ menu_activate(ACT_START);   return; }
+        if (key=='r' || key=='R'){ menu_activate(ACT_RESTART); return; }
+
+        return;
+    }
+
+    // --- In-game keys ---
+    if ((key == 'p' || key == 'P') && !g_gameOver) {
         g_paused = !g_paused;
+        if (g_paused) g_mode = MODE_MENU; // show menu when paused
         glutPostRedisplay();
         return;
     }
-    if (key == 'r' || key == 'R')
-    {
+    if (key == 'r' || key == 'R') {
         g_paused = false;
         g_lives = 3;
         g_gameOver = false;
@@ -980,23 +1201,24 @@ static void keyDown(unsigned char key, int, int)
         reset_game();
         return;
     }
-    if (key == 'h' || key == 'H')
-    {
+    if (key == 'h' || key == 'H') {
         g_hudSide = (g_hudSide == HUD_LEFT) ? HUD_RIGHT : HUD_LEFT;
         glutPostRedisplay();
         return;
     }
-    if (key == 'f' || key == 'F')
-    {
+    if (key == 'f' || key == 'F') {
         toggle_fullscreen();
         glutPostRedisplay();
         return;
     }
-    if (key == 27)
-    {
-        std::exit(0);
+    if (key == 27) { // Esc opens menu instead of quitting
+        g_mode = MODE_MENU;
+        g_paused = true;
+        glutPostRedisplay();
+        return;
     }
 }
+
 
 // --------------- Main ---------------
 int main(int argc, char **argv)
@@ -1024,11 +1246,12 @@ int main(int argc, char **argv)
     init_ghosts();
 
     glutDisplayFunc(display);
-    glutFullScreen();
+    //glutFullScreen();
     glutReshapeFunc(reshape);
 
     glutSpecialFunc(specialKey);
     glutKeyboardFunc(keyDown);
+    glutMouseFunc(mouseBtn);
 
     glutTimerFunc(1000 / 120, timer, 0);
     glutMainLoop();

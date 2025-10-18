@@ -15,6 +15,10 @@
 
 // ---------- Types ----------
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 static constexpr float PI = 3.14159265358979323846f;
 
 struct Texture { GLuint id=0; int w=0, h=0; };
@@ -385,6 +389,54 @@ void draw_set_ghost_state(int which, float x, float y, int dir, int mode){
         int base = ghost_base_row_from_index(which);
         g.anim.set_frames(ghost_dir_frames(base, dir), true);
     }
+}
+
+// GLUT stroke fonts are in ~119.05 unit height.
+// We'll scale to desired pixel height and center horizontally.
+
+
+void draw_title_centered(float cx, float y,
+                         const char* s,
+                         float px_height,
+                         float r, float g, float b)
+{
+    if(!s) return;
+
+    // FreeGLUT wants a void* (not const)
+    void* font = GLUT_STROKE_ROMAN;
+
+    // GLUT stroke fonts are ~119.05 units high
+    const float nominal_h = 119.05f;
+    const float scale = px_height / nominal_h;
+
+    // Width in stroke units -> pixels
+    const int len_units = glutStrokeLength(font,
+        reinterpret_cast<const unsigned char*>(s));
+    const float w_px = len_units * scale;
+
+    glDisable(GL_TEXTURE_2D);
+
+    // Shadow (for contrast)
+    glPushMatrix();
+      glTranslatef(cx - w_px*0.5f + 2.0f, y - 2.0f, 0.0f);
+      glScalef(scale, scale, 1.0f);
+      glLineWidth(5.0f);              // “bold”
+      glColor3f(0.f, 0.f, 0.f);
+      for(const char* p = s; *p; ++p) glutStrokeCharacter(font, *p);
+    glPopMatrix();
+
+    // Main title
+    glPushMatrix();
+      glTranslatef(cx - w_px*0.5f, y, 0.0f);
+      glScalef(scale, scale, 1.0f);
+      glLineWidth(5.0f);              // “bold”
+      glColor3f(r, g, b);
+      for(const char* p = s; *p; ++p) glutStrokeCharacter(font, *p);
+    glPopMatrix();
+
+    glLineWidth(1.0f);
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1,1,1,1);
 }
 
 
