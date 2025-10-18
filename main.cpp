@@ -9,6 +9,7 @@
 #include <algorithm>
 #include "draw.h"
 #include "audio.h" // Audio
+#include <queue>
 
 static int WW = 226 * 3, HH = 248 * 3;
 
@@ -330,72 +331,151 @@ static Dir choose_dir(int g, int cx, int cy)
 {
     Ghost &gh = ghosts[g];
 
-    // valid directions (no reversing unless forced)
-    Dir candidates[4] = {UP, LEFT, DOWN, RIGHT};
-    Dir best = NONE;
-    int bestScore = 1e9;
-
-    int tx, ty;
-    ghost_target_tile(g, tx, ty);
-
-    int openCount = 0;
-    for (Dir d : candidates)
+    // 1) Frightened: keep your random wandering (avoid reverse if possible)
+    if (gh.mode == FRIGHTENED)
     {
-        if (d == NONE)
-            continue;
-        if (opposite(d) == gh.dir)
-            continue; // don't reverse unless only option
-
-        int nx = cx + dx(d);
-        int ny = cy + dy(d);
-        if (!is_blocked(nx, ny))
-        {
-            ++openCount;
-            // use squared distance (Manhattan is also fine)
-            int score = (tx - nx) * (tx - nx) + (ty - ny) * (ty - ny);
-            if (score < bestScore)
-            {
-                bestScore = score;
-                best = d;
-            }
-        }
-    }
-
-    // If dead end or only reverse is possible, allow reverse
-    if (best == NONE)
-    {
-        for (Dir d : candidates)
-        {
-            int nx = cx + dx(d);
-            int ny = cy + dy(d);
-            if (!is_blocked(nx, ny))
-            {
-                best = d;
-                break;
-            }
-        }
-    }
-
-    // Frightened mode: pick a random legal direction (still avoid walls)
-    if (ghosts[g].mode == FRIGHTENED)
-    {
+        Dir candidates[4] = {UP, LEFT, DOWN, RIGHT};
         std::vector<Dir> legal;
         for (Dir d : candidates)
         {
-            if (d == NONE)
-                continue;
-            if (opposite(d) == gh.dir)
-                continue;
-            int nx = cx + dx(d), ny = cy + dy(d);
-            if (!is_blocked(nx, ny))
-                legal.push_back(d);
+            if (d == NONE) continue;
+            if (opposite(d) == gh.dir) continue;
+
+            int nx = cx + dx(d);
+            int ny = cy + dy(d);
+
+            // Tunnel wrap from edge 'T'
+            if (MAZE_RAW[cy][cx] == 'T')
+            {
+                if (cx == 0 && d == LEFT) nx = COLS - 1;
+                else if (cx == COLS - 1 && d == RIGHT) nx = 0;
+            }
+
+            if (!is_blocked(nx, ny)) legal.push_back(d);
         }
         if (!legal.empty())
-        {
-            best = legal[std::rand() % legal.size()];
-        }
+            return legal[std::rand() % legal.size()];
+        // if no non-reverse exits, we'll fall through and allow reverse via BFS fallback
     }
-    return best == NONE ? gh.dir : best;
+
+    // 2) Compute target normally
+    int tx, ty;
+    ghost_target_tile(g, tx, ty);
+
+    // If already at target, try to continue straight if possible
+    if (cx == tx && cy == ty)
+    {
+        int nx = cx + dx(gh.dir);
+        int ny = cy + dy(gh.dir);
+        if (!is_blocked(nx, ny))
+            return gh.dir;
+    }
+
+    // 3) BFS shortest path from (cx,cy) to (tx,ty), respecting tunnel wrap and
+    //    "avoid reversing unless it’s the only way out" at the start tile.
+    struct P { short x, y; };
+    bool visited[ROWS][COLS] = {};
+    P parent[ROWS][COLS];
+    for (int y = 0; y < ROWS; ++y)
+        for (int x = 0; x < COLS; ++x)
+            parent[y][x] = {-1, -1};
+
+    auto in_bounds = [](int x, int y) {
+        return x >= 0 && x < COLS && y >= 0 && y < ROWS;
+    };
+
+    auto enqueue = [&](int x, int y, int px, int py, std::queue<P> &q) {
+        if (!in_bounds(x, y)) return;
+        if (visited[y][x]) return;
+        if (is_blocked(x, y)) return;
+        visited[y][x] = true;
+        parent[y][x] = {(short)px, (short)py};
+        q.push({(short)x, (short)y});
+    };
+
+    std::queue<P> q;
+    visited[cy][cx] = true;
+    parent[cy][cx] = {-1, -1};
+    q.push({(short)cx, (short)cy});
+
+    Dir rev = opposite(gh.dir);
+
+    auto push_neighbors = [&](int x, int y) {
+        const Dir order[4] = {UP, LEFT, DOWN, RIGHT}; // classic tie-break: U,L,D,R
+        const bool atTunnel = (MAZE_RAW[y][x] == 'T');
+        const bool isRoot = (x == cx && y == cy);
+
+        // Count non-reverse options at the root
+        int nonRevCount = 0;
+        if (isRoot)
+        {
+            for (Dir d : order)
+            {
+                if (d == rev) continue;
+                int nx = x + dx(d), ny = y + dy(d);
+                if (atTunnel)
+                {
+                    if (x == 0 && d == LEFT) nx = COLS - 1;
+                    else if (x == COLS - 1 && d == RIGHT) nx = 0;
+                }
+                if (in_bounds(nx, ny) && !is_blocked(nx, ny)) ++nonRevCount;
+            }
+        }
+
+        for (Dir d : order)
+        {
+            if (isRoot && nonRevCount > 0 && d == rev) continue; // avoid reverse unless forced
+            int nx = x + dx(d), ny = y + dy(d);
+            if (atTunnel)
+            {
+                if (x == 0 && d == LEFT) nx = COLS - 1;
+                else if (x == COLS - 1 && d == RIGHT) nx = 0;
+            }
+            enqueue(nx, ny, x, y, q);
+        }
+    };
+
+    // BFS loop
+    while (!q.empty())
+    {
+        P p = q.front(); q.pop();
+        if (p.x == tx && p.y == ty) break;
+        push_neighbors(p.x, p.y);
+    }
+
+    // 4) If unreachable (shouldn’t happen on a valid maze), fall back to a simple legal move
+    if (!visited[ty][tx])
+    {
+        // try straight
+        int nx = cx + dx(gh.dir), ny = cy + dy(gh.dir);
+        if (!is_blocked(nx, ny)) return gh.dir;
+
+        // try any non-reverse legal
+        const Dir order[4] = {UP, LEFT, DOWN, RIGHT};
+        for (Dir d : order)
+        {
+            if (d == rev) continue;
+            nx = cx + dx(d); ny = cy + dy(d);
+            if (!is_blocked(nx, ny)) return d;
+        }
+        // must reverse
+        return rev != NONE ? rev : gh.dir;
+    }
+
+    // 5) Reconstruct first step from (cx,cy) toward (tx,ty)
+    int rx = tx, ry = ty;
+    while (!(parent[ry][rx].x == cx && parent[ry][rx].y == cy))
+    {
+        P pr = parent[ry][rx];
+        if (pr.x == -1 && pr.y == -1) break; // safety
+        rx = pr.x; ry = pr.y;
+    }
+
+    if (rx > cx) return RIGHT;
+    if (rx < cx) return LEFT;
+    if (ry > cy) return DOWN;
+    if (ry < cy) return UP;
+    return gh.dir; // fallback
 }
 static void init_ghosts()
 {
