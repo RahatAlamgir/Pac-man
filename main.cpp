@@ -14,7 +14,7 @@
 static int WW = 226 * 3, HH = 248 * 3;
 
 // --- Fullscreen state ---
-static bool g_fullscreen = false;
+static bool g_fullscreen = true;
 static int g_windowX = 100, g_windowY = 100;
 static int g_windowW = WW, g_windowH = HH;
 
@@ -93,9 +93,9 @@ static const char *MAZE_RAW[ROWS] = {
     "WWWWWW.WWWWW WW WWWWW.WWWWWW",
     "WWWWWW.WWWWW WW WWWWW.WWWWWW",
     "WWWWWW.WW          WW.WWWWWW",
-    "WWWWWW.WW WWWGGWWW WW.WWWWWW",
+    "WWWWWW.WW WWW  WWW WW.WWWWWW",
     "WWWWWW.WW W      W WW.WWWWWW",
-    "T     .   W BNIC W   .     T",
+    "T     .   W      W   .     T",
     "WWWWWW.WW W      W WW.WWWWWW",
     "WWWWWW.WW WWWWWWWW WW.WWWWWW",
     "WWWWWW.WW          WW.WWWWWW",
@@ -116,7 +116,7 @@ static const char *MAZE_RAW[ROWS] = {
 static char GRID[ROWS][COLS]; // copy of MAZE_RAW you can edit
 static int score = 0;
 static int dots_left = 0;
-float power_time = 6.0f; // seconds of energizer effect
+float power_time = 0.0f; // seconds of energizer effect
 
 static void init_grid()
 {
@@ -277,7 +277,7 @@ static void ghost_target_tile(int g, int &tx, int &ty)
     {
         // send home (just pick the center above house so they don't get stuck)
         tx = COLS / 2;
-        ty = 11;
+        ty = 13;
         return;
     }
 
@@ -480,9 +480,9 @@ static Dir choose_dir(int g, int cx, int cy)
 static void init_ghosts()
 {
     // reasonable corridor starts (outside the house so they can roam)
-    ghosts[0] = Ghost{13, 14, UP}; // Blinky
-    ghosts[1] = Ghost{14, 14, UP}; // Pinky
-    ghosts[2] = Ghost{12, 14, UP}; // Inky
+    ghosts[0] = Ghost{14, 14, UP}; // Blinky
+    ghosts[1] = Ghost{13, 14, LEFT}; // Pinky
+    ghosts[2] = Ghost{12, 14, RIGHT}; // Inky
     ghosts[3] = Ghost{15, 14, UP}; // Clyde
 
     // initial scatter
@@ -509,11 +509,12 @@ static void reset_after_death()
     pac.ty = 23;
     pac.dir = UP;
     pac.want = RIGHT;
+    power_time = 0.0f;
 
     // Reset ghosts to their starting tiles & modes
-    ghosts[0] = Ghost{13, 14, LEFT, LEFT, 3.8f, SCATTER, 0.0f, 0.0f}; // Blinky
-    ghosts[1] = Ghost{14, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};     // Pinky
-    ghosts[2] = Ghost{12, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};     // Inky
+    ghosts[0] = Ghost{14, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f}; // Blinky
+    ghosts[1] = Ghost{13, 14, LEFT, LEFT, 3.8f, SCATTER, 0.0f, 0.0f};     // Pinky
+    ghosts[2] = Ghost{12, 14, RIGHT, RIGHT, 3.8f, SCATTER, 0.0f, 0.0f};     // Inky
     ghosts[3] = Ghost{15, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};     // Clyde
 
     // Sync renderer (Pac + all ghosts)
@@ -849,7 +850,7 @@ static void timer(int)
         // EATEN -> when reaches �home� switch back to scatter
         if (gh.mode == EATEN)
         {
-            if ((int)std::round(gh.tx) == COLS / 2 && (int)std::round(gh.ty) == 11)
+            if ((int)std::round(gh.tx) == COLS / 2 && (int)std::round(gh.ty) == 13)
             {
                 gh.mode = SCATTER;
             }
@@ -991,6 +992,7 @@ int main(int argc, char **argv)
     init_ghosts();
 
     glutDisplayFunc(display);
+    glutFullScreen();
     glutReshapeFunc(reshape);
 
     glutSpecialFunc(specialKey);

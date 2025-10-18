@@ -71,7 +71,7 @@
 	<intrin.h>
 	<arm_neon.h>
 
-1760772271 source:f:\djnago\git_setup\project\pac-man\main.cpp
+1760780679 source:f:\djnago\git_setup\project\pac-man\main.cpp
 	<GL/glew.h>
 	<GL/freeglut.h>
 	<vector>
@@ -83,6 +83,7 @@
 	<algorithm>
 	"draw.h"
 	"audio.h"
+	<queue>
 
 1760768462 f:\djnago\git_setup\project\pac-man\draw.h
 
