@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include <cstring>
 
 // ---------- stb_image ----------
 #define STB_IMAGE_IMPLEMENTATION
@@ -439,6 +440,62 @@ void draw_title_centered(float cx, float y,
     glColor4f(1,1,1,1);
 }
 
+void draw_title_centered_spaced(float cx, float y,
+                                const char* s,
+                                float px_height,
+                                float r, float g, float b,
+                                float tracking_px)
+{
+    if(!s) return;
+    void* font = GLUT_STROKE_ROMAN;
+
+    // Stroke units -> pixel scale (same as your title)
+    const float nominal_h = 119.05f;
+    const float scale = px_height / nominal_h;
+
+    // Base width in stroke units
+    const int len_units = glutStrokeLength(font,
+        reinterpret_cast<const unsigned char*>(s));
+    const int n = (int)std::strlen(s);
+
+    // Total width in *pixels* includes extra tracking between glyphs
+    const float w_px = len_units * scale + (n > 1 ? (n - 1) * tracking_px : 0.0f);
+
+    // Convert tracking to stroke units so we can glTranslatef in stroke space
+    const float track_units = (scale > 0.0f) ? (tracking_px / scale) : 0.0f;
+
+    glDisable(GL_TEXTURE_2D);
+
+    // Shadow
+    glPushMatrix();
+      glTranslatef(cx - w_px*0.5f + 2.0f, y - 2.0f, 0.0f);
+      glScalef(scale, scale, 1.0f);
+      glLineWidth(5.0f);
+      glColor3f(0.f, 0.f, 0.f);
+      for (int i = 0; i < n; ++i) {
+          glutStrokeCharacter(font, s[i]);
+          if (i+1 < n) glTranslatef(track_units, 0.f, 0.f); // add spacing
+      }
+    glPopMatrix();
+
+    // Main
+    glPushMatrix();
+      glTranslatef(cx - w_px*0.5f, y, 0.0f);
+      glScalef(scale, scale, 1.0f);
+      glLineWidth(5.0f);
+      glColor3f(r, g, b);
+      for (int i = 0; i < n; ++i) {
+          glutStrokeCharacter(font, s[i]);
+          if (i+1 < n) glTranslatef(track_units, 0.f, 0.f);
+      }
+    glPopMatrix();
+
+    glLineWidth(1.0f);
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1,1,1,1);
+}
+
+
 void draw_hud_pac_icon(float cx, float cy, float scale, int dir)
 {
     // Animated Pac-Man using same 3-frame chomp sequence
@@ -456,7 +513,7 @@ void draw_hud_pac_icon(float cx, float cy, float scale, int dir)
     lastT = now;
     anim.update(dt);
 
-    const Frame& f = anim.cur();
+    //const Frame& f = anim.cur();
     float ts = tile_size_px() * scale;
 
     // get UVs for current frame and facing direction

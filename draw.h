@@ -51,6 +51,12 @@ void draw_title_centered(float cx, float y,
                          float px_height,
                          float r, float g, float b);
 
+void draw_title_centered_spaced(float cx, float y,
+                                const char* s,
+                                float px_height,
+                                float r, float g, float b,
+                                float tracking_px);
+
 
 // Draw animated Pac-Man life icon (pixel coords)
 // scale=1.0 ≈ one tile; dir=1 right, 2 left, 3 up, 4 down

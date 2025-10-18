@@ -807,8 +807,29 @@ static void draw_menu()
     glEnd();
     glEnable(GL_TEXTURE_2D);
 
+
+
     // Big bold title (your stroke helper)
+
+
+
+
+    const float cx     = WW * 0.5f;  // center x
+    const float yLabel = HH * 0.19f; // tweak these 2 lines to move up/down
+    const float yValue = yLabel - 56.0f;
+
+    const float labelY = HH * 0.19f;
+    const float valueY = labelY - 26.0f;
+
     draw_title_centered(WW * 0.5f, HH * 0.78f, "PAC-MAN", 72.0f, 1.0f, 1.0f, 0.2f);
+    char hiBuf[16];
+    std::snprintf(hiBuf, sizeof(hiBuf), "%06d", std::min(g_highScore, 999999));
+
+    // add ~6–10 px of extra spacing between letters
+    draw_title_centered_spaced(cx, labelY, "HIGH SCORE", 28.0f,
+                           0.85f, 0.90f, 1.0f, /*tracking_px=*/8.0f);
+
+    draw_title_centered(cx, yValue, hiBuf,      36.0f, 0.53f, 0.81f, 0.98f);  // sky blue digits
 
     for (int i=0; i<g_menuCount; ++i){
         Rect r = g_btn[i];
@@ -822,8 +843,7 @@ static void draw_menu()
         draw_text_shadow(tx, ty, s, 1,1,1);
     }
 
-    draw_text_shadow(WW*0.5f - draw_text_width("Use Up/Down and Enter (or click)")*0.5f,
-                     HH*0.2f, "Use Up/Down and Enter (or click)", 1,1,1);
+
 }
 
 
