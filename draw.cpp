@@ -439,6 +439,45 @@ void draw_title_centered(float cx, float y,
     glColor4f(1,1,1,1);
 }
 
+void draw_hud_pac_icon(float cx, float cy, float scale, int dir)
+{
+    // Animated Pac-Man using same 3-frame chomp sequence
+    static Animator anim;
+    static bool initialized = false;
+    if (!initialized) {
+        anim.set_frames(pac_frames_for_dir(1), false);
+        initialized = true;
+    }
+
+    // update independent of game time (roughly 8 Hz)
+    static double lastT = 0.0;
+    double now = glutGet(GLUT_ELAPSED_TIME) * 0.001;
+    float dt = (lastT == 0.0) ? 0.0f : float(now - lastT);
+    lastT = now;
+    anim.update(dt);
+
+    const Frame& f = anim.cur();
+    float ts = tile_size_px() * scale;
+
+    // get UVs for current frame and facing direction
+    float u0, v0, u1, v1;
+    std::vector<Frame> temp = pac_frames_for_dir(dir);
+    int col = temp[anim.idx % (int)temp.size()].col;
+    int row = temp[anim.idx % (int)temp.size()].row;
+    tileUV(col, row, u0, v0, u1, v1);
+
+    // draw from sheet
+    glBindTexture(GL_TEXTURE_2D, g_sheet.id);
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1, 1, 1, 1);
+    glBegin(GL_QUADS);
+      glTexCoord2f(u0, v1); glVertex2f(cx - ts*0.5f, cy - ts*0.5f);
+      glTexCoord2f(u1, v1); glVertex2f(cx + ts*0.5f, cy - ts*0.5f);
+      glTexCoord2f(u1, v0); glVertex2f(cx + ts*0.5f, cy + ts*0.5f);
+      glTexCoord2f(u0, v0); glVertex2f(cx - ts*0.5f, cy + ts*0.5f);
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 
 

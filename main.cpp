@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <fstream>
 #include <algorithm>
 #include "draw.h"
 #include "audio.h" // Audio
@@ -17,6 +18,12 @@ static int WW = 226 * 3, HH = 248 * 2;
 static bool g_fullscreen = false;
 static int g_windowX = 100, g_windowY = 100;
 static int g_windowW = WW, g_windowH = HH;
+
+// --- Countdown timer (gamewide) ---
+static const int  g_timeLimitSec = 180;     // 3 minutes = 180 seconds
+static float      g_timeLeftSec  = (float)g_timeLimitSec;
+static bool       g_timerActive  = true;    // ticking when playing (not paused)
+
 
 static void toggle_fullscreen()
 {
@@ -52,6 +59,12 @@ enum MenuAction { ACT_START, ACT_RESUME, ACT_RESTART, ACT_QUIT,ACT_FULLWINDOW };
 static MenuAction g_menuOrder[4];
 static int g_menuCount = 0;
 
+
+
+static int  g_highScore    = 0;      // persistent best
+static bool g_highDirty    = false;  // changed this session (needs saving)
+static const char* kHighFile = "highscore.dat";
+
 // --- SFX paths (put the actual files in these locations or change the paths) ---
 static const char *SFX_PELLET = "assets/sfx/pellet.wav";
 static const char *SFX_POWER = "assets/sfx/pellet.wav";
@@ -65,7 +78,7 @@ enum HudSide
     HUD_RIGHT = 1
 };
 static HudSide g_hudSide = HUD_RIGHT; // default: right of maze
-int hiScore = 0;
+
 enum Dir
 {
     UP = 3,
@@ -133,6 +146,20 @@ static char GRID[ROWS][COLS]; // copy of MAZE_RAW you can edit
 static int score = 0;
 static int dots_left = 0;
 float power_time = 0.0f; // seconds of energizer effect
+static int g_eatStreak = 0;
+
+// --- Tiny score popups when eating frightened ghosts ---
+struct ScorePopup {
+    float x_px;    // screen pixel position (already converted)
+    float y_px;
+    int   points;  // 200, 400, 800, 1600
+    float age;     // seconds since spawn
+};
+static std::vector<ScorePopup> g_popups;
+
+static constexpr float POPUP_LIFETIME = 1.00f; // seconds on screen
+static constexpr float POPUP_RISE_PX  = 24.0f; // how far it floats upward
+
 
 static void init_grid()
 {
@@ -179,6 +206,21 @@ static inline bool is_blocked(int tx, int ty)
     // Treat walls as blocked; keep the ghost house simple by blocking everything non-path
     return (c == 'W');
 }
+
+// Zero-pad to 6 digits like classic cabinets (caps at 999999)
+static inline void fmt_score6(int v, char *out, size_t n)
+{
+    if (v < 0) v = 0;
+    if (v > 999999) v = 999999;
+    std::snprintf(out, n, "%06d", v);
+}
+static inline void fmt_time_mmss(int sec, char* out, size_t n) {
+    if (sec < 0) sec = 0;
+    int m = sec / 60;
+    int s = sec % 60;
+    std::snprintf(out, n, "%02d:%02d", m, s);
+}
+
 
 static inline int manhattan(int ax, int ay, int bx, int by)
 {
@@ -233,6 +275,41 @@ static inline void tunnel_wrap()
             pac.tx = 0.0f;
     }
 }
+
+
+
+static void load_high_score()
+{
+    std::ifstream in(kHighFile, std::ios::binary);
+    if (!in) { g_highScore = 0; return; }
+
+    int v = 0;
+    in.read(reinterpret_cast<char*>(&v), sizeof(v));
+    if (in && v >= 0 && v < 100000000) g_highScore = v;  // sanity check
+}
+
+static void save_high_score()
+{
+    std::ofstream out(kHighFile, std::ios::binary | std::ios::trunc);
+    if (!out) return;
+    out.write(reinterpret_cast<const char*>(&g_highScore), sizeof(g_highScore));
+}
+
+static inline void try_update_high(int currentScore)
+{
+    if (currentScore > g_highScore) { g_highScore = currentScore; g_highDirty = true; }
+}
+
+static void spawn_score_popup_at_tile(float tx, float ty, int pts)
+{
+    ScorePopup p;
+    p.x_px  = px_from_tx(tx);   // convert tile space to pixel coords
+    p.y_px  = py_from_ty(ty);
+    p.points = pts;
+    p.age    = 0.0f;
+    g_popups.push_back(p);
+}
+
 
 // --------------- Dots ---------------
 
@@ -558,6 +635,7 @@ static void reset_after_death()
     pac.dir = UP;
     pac.want = RIGHT;
     power_time = 0.0f;
+    g_eatStreak = 0;
 
     // Reset ghosts to their starting tiles & modes
     ghosts[0] = Ghost{14, 14, UP, UP, 3.8f, SCATTER, 0.0f, 0.0f};       // Blinky
@@ -581,6 +659,7 @@ static void reset_after_death()
 
 static void lose_life()
 {
+    g_eatStreak = 0;
     if (g_gameOver)
         return; // already game over; ignore
 
@@ -597,20 +676,29 @@ static void lose_life()
         g_gameOver = true;
         g_paused = true; // freeze gameplay on Game Over
         // Play game-over sound here
+        try_update_high(score);
+        if (g_highDirty) { save_high_score(); g_highDirty = false; }
         audio_play(SFX_INTERMISSION);
     }
 }
+
 
 
 static void reset_game()
 {
     // Clear render entities (so we don�t stack duplicates)
     draw_clear_entities();
+    g_timeLeftSec = (float)g_timeLimitSec;
+    g_timerActive = true;
 
     // Reset grid & counters
     init_grid();
     score = 0;
     power_time = 0.0f;
+    g_eatStreak = 0;
+
+    g_gameOver = false;
+
 
     // Reset Pac to struct defaults
     pac = Pac{}; // uses your default member initializers
@@ -787,63 +875,138 @@ static void display()
 
     draw_dots();
     draw_render();
-    if (score > hiScore)
-        hiScore = score;
+
+
+
+    // --- Floating score popups (draw on top of maze/entities) ---
+    for (const auto &p : g_popups) {
+        float t = std::min(std::max(p.age / POPUP_LIFETIME, 0.0f), 1.0f);
+        float y = p.y_px - POPUP_RISE_PX * t; // rise up over time
+
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "+%d", p.points);
+
+        // center text horizontally at x_px
+        int tw = draw_text_width(buf);   // provided by draw.cpp
+        float x = p.x_px - tw * 0.5f;
+
+        // use your existing shadowed bitmap text (white looks nice here)
+        // sky blue color (RGB)
+        draw_text_shadow(x, y, buf, 0.53f, 0.81f, 0.98f);  // light sky blue
+
+    }
+
 
     // --- HUD ---
     // --- Maze-anchored HUD (classic layout) ---
-    // Grid width/height (replace with your actual names if different)
-    const int GW = 28; // grid_w();   // or your constant, e.g., 28
-    const int GH = 31; // grid_h();   // or your constant, e.g., 31
+    const int GW = 28;
+    const int GH = 31;
+    const float hudYOffset = 30.0f;
 
-    // Maze bounds in window pixels.
-    // left = center of tile 0 minus half-cell; right/top similar.
-    // Convert tiles to pixels and compute maze rect regardless of Y direction
+    // Maze bounds in window pixels
     const float y0 = py_from_ty(0);
     const float yN = py_from_ty(GH - 1);
     const float topY = std::max(y0, yN) + cell() * 0.5f;
     const float bottomY = std::min(y0, yN) - cell() * 0.5f;
 
-    const float leftX = px_from_tx(0) - cell() * 0.5f;
+    const float leftX  = px_from_tx(0)      - cell() * 0.5f;
     const float rightX = px_from_tx(GW - 1) + cell() * 0.5f;
 
     // Panel placement
-    const float gap = cell() * 0.60f; // spacing from maze border
-    const float padX = 8.0f;          // inner pad
-    const float lineH = 18.0f;        // line height
+    const float gap   = cell() * 0.60f;
+    const float padX  = 8.0f;
+    const float lineH = 18.0f;
 
-    const bool hudRight = (g_hudSide == HUD_RIGHT);
-    const float panelX = hudRight ? (rightX + gap) : (leftX - gap);
+    const bool  hudRight = (g_hudSide == HUD_RIGHT);
+    const float panelX   = hudRight ? (rightX + gap) : (leftX - gap);
 
-    // Text helpers
-    auto anchorX = [&](const char *s) -> float
-    {
+    // Text helper
+    auto anchorX = [&](const char *s) -> float {
         int w = draw_text_width(s);
         return hudRight ? (panelX + padX) : (panelX - padX - w);
     };
 
-    // Strings
+    // Labels
     char sOneUp[] = "1UP";
-    char sHigh[] = "HIGH SCORE";
+    char sHigh[]  = "HIGH SCORE";
+
     char sScore[32], sHi[32];
-    std::snprintf(sScore, sizeof(sScore), "%d", score);
-    std::snprintf(sHi, sizeof(sHi), "%d", hiScore);
+    fmt_score6(score,      sScore, sizeof(sScore));
+    fmt_score6(g_highScore, sHi,   sizeof(sHi));
+
+    // NEW: detect “new high” (this frame) for a subtle highlight
+    const bool isNewHigh = (score >= g_highScore && g_highScore > 0);
 
     // Layout from top toward bottom
-    float y = topY - 10.0f;
+    float y = topY - 10.0f - hudYOffset;
 
-    draw_text_shadow(anchorX(sOneUp), y, sOneUp, 1, 1, 1);
-    draw_text_shadow(anchorX(sScore), y - lineH, sScore, 1, 1, 1);
+    // Left/Right header column
+    draw_text_shadow(anchorX(sOneUp), y, sOneUp, 1.0f, 1.0f, 1.0f);
+    // Current score (warm tint)
+    draw_text_shadow(anchorX(sScore), y - lineH, sScore, 1.00f, 0.95f, 0.70f);
 
+    // Spacer
     y -= lineH * 2.0f + 10.0f;
 
-    draw_text_shadow(anchorX(sHigh), y, sHigh, 1, 1, 1);
-    draw_text_shadow(anchorX(sHi), y - lineH, sHi, 1, 1, 1);
+    // High score header (cool tint)
+    draw_text_shadow(anchorX(sHigh), y, sHigh, 0.80f, 0.90f, 1.00f);
 
-    // Lives line
-    char sLives[32];
-    std::snprintf(sLives, sizeof(sLives), "LIVES %d", g_lives);
-    draw_text_shadow(anchorX(sLives), y - lineH * 2.0f, sLives, 1, 1, 1);
+    // High score value
+    // If you just beat it, flash in sky blue this frame.
+    const float hx = anchorX(sHi);
+    const float hy = y - lineH;
+    if (isNewHigh) {
+        // sky blue (to match your popups)
+        draw_text_shadow(hx, hy, sHi, 0.53f, 0.81f, 0.98f);
+    } else {
+        draw_text_shadow(hx, hy, sHi, 1.0f, 1.0f, 1.0f);
+    }
+
+    char sTimeLbl[] = "TIME";
+    char sTime[16];
+
+    // ceil so 0.4s shows as the last “1” visually
+    int secs = (int)std::ceil(g_timeLeftSec);
+    fmt_time_mmss(secs, sTime, sizeof(sTime));
+
+    // layout
+    y -= lineH * 2.0f + 10.0f;  // move down a block (same pattern as above)
+    draw_text_shadow(anchorX(sTimeLbl), y, sTimeLbl, 1, 1, 1);
+
+    // Warning color under 10s
+    float tr = 1.0f, tg = 1.0f, tb = 1.0f;
+    if (g_timeLeftSec <= 10.0f) {
+        double t = glutGet(GLUT_ELAPSED_TIME) * 0.001;
+        if (std::fmod(t, 0.5) < 0.25) { tr = 1, tg = 1, tb = 1; } // flash white
+    }
+
+    draw_text_shadow(anchorX(sTime), y - lineH, sTime, tr, tg, tb);
+
+    // Lives line (kept as-is)
+    const int lives = std::max(0, g_lives);
+
+    const float iconScale = 1.0f;   // 1.0 = one tile size
+    const float ts        = cell(); // tile size in px
+    const float spacing   = ts * 1.6f;
+    const float hudLivesYOffset = 20.0f;   // try 20–36 px
+
+    // OLD:
+    // const float yIcons = (y - lineH * 2.0f) + 6.0f;
+
+    // NEW (lowered by hudLivesYOffset):
+    const float yIcons = (y - lineH * 2.0f) + 6.0f - hudLivesYOffset;
+    float totalW = lives * spacing;
+    float startX = hudRight
+        ? (panelX + padX + ts * 0.5f)
+        : (panelX - padX - totalW + ts * 0.5f);
+
+    int iconDir = hudRight ? 1 : 2; // face inward if you want symmetry
+
+    for (int i = 0; i < lives; ++i) {
+        float cx = startX + i * spacing;
+        draw_hud_pac_icon(cx, yIcons, iconScale, iconDir);
+    }
+
 
     // Game Over overlay
     if (g_gameOver)
@@ -851,10 +1014,6 @@ static void display()
         draw_text(WW * 0.5f - 50.0f, HH * 0.5f, "GAME OVER", 1.0f, 0.3f, 0.3f);
     }
 
-    if (g_paused && !g_gameOver)
-    {
-        draw_text(WW * 0.5f - 40.0f, HH * 0.5f, "PAUSED", 1.0f, 1.0f, 0.2f);
-    }
 
     if (g_mode == MODE_MENU) {
         draw_menu();
@@ -873,6 +1032,38 @@ static void timer(int)
 {
     const float dt = 1.0f / 120.0f;
     const float step = pac.speed * dt; // tiles per frame
+
+    // --- Countdown update ---
+    if (!g_paused && !g_gameOver && g_timerActive) {
+        g_timeLeftSec -= dt;
+        if (g_timeLeftSec < 0.0f) g_timeLeftSec = 0.0f;
+
+        if (g_timeLeftSec <= 0.0f) {
+            // time up -> game over
+            g_gameOver = true;
+            g_paused   = true;
+
+            // capture high score if it’s a new best
+            try_update_high(score);
+            if (g_highDirty) { save_high_score(); g_highDirty = false; }
+
+            // optional sound (use an existing one if you don’t have a timeout sfx)
+            // audio_play(SFX_TIMEOUT);
+            // or: audio_play(SFX_DEATH);
+        }
+    }
+
+
+    // --- Update floating score popups ---
+    for (auto &p : g_popups) {
+        p.age += dt;
+    }
+    // remove expired
+    g_popups.erase(
+                std::remove_if(g_popups.begin(), g_popups.end(),
+                   [](const ScorePopup& p){ return p.age >= POPUP_LIFETIME; }),
+                g_popups.end());
+
 
 
     if (g_mode == MODE_MENU) {
@@ -924,22 +1115,45 @@ static void timer(int)
         {
             c = ' ';
             score += 10;
-            --dots_left;
+            try_update_high(score);
+            if(--dots_left<= 0) {
+                    g_gameOver = true;
+                    g_paused   = true;
+                    try_update_high(score);       // make sure best is captured
+                    if (g_highDirty) { save_high_score(); g_highDirty = false; }
+
+            }
+
             audio_play(SFX_ARCADE); // <<< sound: small dot
         }
         else if (c == 'o')
         {
             c = ' ';
             score += 50;
+            try_update_high(score);
             power_time = 6.0f;
-            --dots_left;
+            g_eatStreak = 0;
+            if(--dots_left<= 0) {
+                    g_gameOver = true;
+                    g_paused   = true;
+                    try_update_high(score);       // make sure best is captured
+                    if (g_highDirty) { save_high_score(); g_highDirty = false; }
+
+            }
             audio_play(SFX_POWER); // <<< sound: power-up (energizer)
         }
     }
 
+
     // decrement power timer
     if (power_time > 0.0f)
         power_time = std::max(0.0f, power_time - dt);
+
+    static bool wasPowered = false;
+    if (wasPowered && power_time <= 0.0f) {
+        g_eatStreak = 0;
+    }
+    wasPowered = (power_time > 0.0f);
 
     // move toward next tile center if not blocked
     {
@@ -1106,6 +1320,12 @@ static void timer(int)
             if (power_time > 0.0f && gh.mode != EATEN)
             {
                 gh.mode = EATEN;           // send to house
+                ++g_eatStreak;
+                int add = 200 << (g_eatStreak - 1);  // 200 * 2^(streak-1)
+                if (add > 1600) add = 1600;          // cap just in case
+                score += add;
+                try_update_high(score);
+                spawn_score_popup_at_tile(gh.tx, gh.ty, add);
                 audio_play(SFX_EAT_GHOST); // <<< sound: chomp ghost
             }
             else if (gh.mode != EATEN)
@@ -1126,6 +1346,7 @@ static void timer(int)
                              gh.dir,
                              (int)gh.mode);
     }
+
 
     draw_update(dt);
     glutPostRedisplay();
@@ -1251,7 +1472,7 @@ int main(int argc, char **argv)
     float start_py = py_from_ty(pac.ty);
     draw_load_demo((int)start_px, (int)start_py, pac.dir);
     init_ghosts();
-
+    load_high_score();
     glutDisplayFunc(display);
     //glutFullScreen();
     glutReshapeFunc(reshape);

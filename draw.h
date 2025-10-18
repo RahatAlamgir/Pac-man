@@ -52,3 +52,6 @@ void draw_title_centered(float cx, float y,
                          float r, float g, float b);
 
 
+// Draw animated Pac-Man life icon (pixel coords)
+// scale=1.0 ≈ one tile; dir=1 right, 2 left, 3 up, 4 down
+void draw_hud_pac_icon(float x, float y, float scale, int dir = 1);
