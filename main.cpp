@@ -46,7 +46,7 @@ struct Rect { float x,y,w,h; };       // window-pixel coords (origin bottom-left
 static Rect g_btn[4];                 // Start, Resume, Restart, Quit
 
 // Menu actions (don’t change order; we map labels from these)
-enum MenuAction { ACT_START, ACT_RESUME, ACT_RESTART, ACT_QUIT };
+enum MenuAction { ACT_START, ACT_RESUME, ACT_RESTART, ACT_QUIT,ACT_FULLWINDOW };
 
 // Current menu composition for this frame
 static MenuAction g_menuOrder[4];
@@ -764,6 +764,11 @@ static void menu_activate(MenuAction act)
             reset_game();
             g_mode = MODE_PLAYING;
             break;
+        case ACT_FULLWINDOW:
+            toggle_fullscreen();
+            glutPostRedisplay();
+
+            break;
 
         case ACT_QUIT:
             std::exit(0);
@@ -1176,12 +1181,14 @@ static void keyDown(unsigned char key, int, int)
             menu_activate(g_menuOrder[g_menuSel]);
             return;
         }
-        if (key == 27) { // Esc = Quit from menu
+        if (key == 27 || key == 'q' || key == 'Q') { // Esc = Quit from menu
             std::exit(0);
         }
         // allow quick toggle to start with 's'
         if (key=='s' || key=='S'){ menu_activate(ACT_START);   return; }
         if (key=='r' || key=='R'){ menu_activate(ACT_RESTART); return; }
+        if (key=='p' || key=='P'){ menu_activate(ACT_RESUME); return; }
+        if (key=='f' || key=='F'){ menu_activate(ACT_FULLWINDOW); return; }
 
         return;
     }
@@ -1211,7 +1218,7 @@ static void keyDown(unsigned char key, int, int)
         glutPostRedisplay();
         return;
     }
-    if (key == 27) { // Esc opens menu instead of quitting
+    if (key == 27 || key == 'q' || key == 'Q') { // Esc opens menu instead of quitting
         g_mode = MODE_MENU;
         g_paused = true;
         glutPostRedisplay();
